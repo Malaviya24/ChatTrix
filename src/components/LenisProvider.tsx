@@ -20,6 +20,7 @@ interface LenisProviderProps {
 
 export default function LenisProvider({ children }: LenisProviderProps) {
   const lenisRef = useRef<Lenis | null>(null);
+  const rafIdRef = useRef<number | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -45,12 +46,16 @@ export default function LenisProvider({ children }: LenisProviderProps) {
         });
 
         // RAF loop for smooth animation
+        let rafId: number;
         function raf(time: number) {
           lenisRef.current?.raf(time);
-          requestAnimationFrame(raf);
+          rafId = requestAnimationFrame(raf);
         }
 
-        requestAnimationFrame(raf);
+        rafId = requestAnimationFrame(raf);
+        
+        // Store rafId in ref for cleanup
+        rafIdRef.current = rafId;
 
         // Add custom scroll event for chat-specific features
         lenisRef.current.on('scroll', () => {
@@ -78,6 +83,10 @@ export default function LenisProvider({ children }: LenisProviderProps) {
       if (lenisRef.current) {
         lenisRef.current.destroy();
         lenisRef.current = null;
+      }
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
       }
       document.removeEventListener('DOMContentLoaded', initializeLenis);
     };

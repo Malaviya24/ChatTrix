@@ -78,19 +78,20 @@ export default function CreateRoomPage() {
       if (response.ok) {
         const data = await response.json();
         
-        // Save room data to localStorage for the success page
+        // Save room data to localStorage for the success page (without password)
         const roomData = {
           id: data.room.id,
           name: roomName,
-          password: formData.password,
           maxUsers: formData.maxParticipants,
           isPrivate: true, // Assuming private by default for new rooms
           messageExpiration: 10, // Default for new rooms
-
           panicMode: false, // Removed panic mode
           invisibleMode: formData.invisibleMode,
         };
         localStorage.setItem(`createdRoom_${data.room.id}`, JSON.stringify(roomData));
+        
+        // Temporarily store password in sessionStorage for next page
+        sessionStorage.setItem(`tempPassword_${data.room.id}`, formData.password);
         
         // Generate a random user ID and avatar for the creator
         const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

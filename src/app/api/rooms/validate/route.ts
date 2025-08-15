@@ -30,7 +30,11 @@ export async function POST(request: NextRequest) {
 
     // Check if room exists
     const room = roomStorage.getRoom(roomId);
-    console.log('🔍 Room validation for:', roomId, { room: !!room, roomData: room });
+    
+    // Debug logging only in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Room validation for:', roomId, { room: !!room, roomId: roomId });
+    }
     
     if (!room) {
       securityService.logAccess(roomId, 'attempt', clientIP, userAgent, false, 'Room not found');
@@ -73,7 +77,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check room capacity
-    const currentUsers = room.participants?.length || 0;
+    const currentUsers = room.participants?.length ?? 0;
     const isAtCapacity = currentUsers >= room.maxUsers;
 
     // Log successful validation

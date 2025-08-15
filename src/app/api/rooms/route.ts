@@ -231,7 +231,7 @@ async function generateUniqueRoomId(): Promise<string> {
   const maxAttempts = 10;
 
   do {
-    roomId = generateRoomId();
+    roomId = await generateRoomId();
     attempts++;
     
     if (attempts > maxAttempts) {

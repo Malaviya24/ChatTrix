@@ -34,12 +34,20 @@ export default function SecurityDashboard() {
 
   useEffect(() => {
     fetch('/api/security/stats')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
       .then(data => {
         setStats(data.stats);
         setIsLoading(false);
       })
-      .catch(() => setIsLoading(false));
+      .catch((error) => {
+        console.error('Failed to fetch security stats:', error);
+        setIsLoading(false);
+      });
   }, []);
 
   if (isLoading) {
@@ -150,8 +158,18 @@ export default function SecurityDashboard() {
                       body: JSON.stringify({ action: 'clearAll' })
                     });
                     if (response.ok) {
-                      // Refresh the stats
-                      window.location.reload();
+                      // Refresh the stats by refetching
+                      fetch('/api/security/stats')
+                        .then(res => {
+                          if (res.ok) return res.json();
+                          throw new Error('Failed to refetch stats');
+                        })
+                        .then(data => {
+                          setStats(data.stats);
+                        })
+                        .catch(error => {
+                          console.error('Failed to refetch stats:', error);
+                        });
                     }
                   } catch (error) {
                     console.error('Failed to clear blocked IPs:', error);

@@ -126,9 +126,9 @@ export function AnimatedGrid() {
       // Horizontal lines
       positions.push(-center, 0, offset, center, 0, offset);
       
-      // Colors for grid lines
-      const color = i % 5 === 0 ? 0x1E40AF : 0x3B82F6; // Section lines vs cell lines
-      colors.push(color, color, color, color, color, color);
+      // Colors for grid lines (normalized RGB values)
+      const color = i % 5 === 0 ? [0.12, 0.25, 0.69] : [0.23, 0.51, 0.96]; // Section lines vs cell lines
+      colors.push(...color, ...color, ...color, ...color, ...color, ...color);
     }
     
     const geometry = new THREE.BufferGeometry();

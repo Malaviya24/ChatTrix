@@ -86,24 +86,6 @@ function RoomCreatedContent() {
 
   const enterRoom = () => {
     if (roomData) {
-      // Save room data to localStorage for chat room
-      const roomDataForChat = {
-        roomId: roomData.id,
-        roomName: roomData.name,
-        password: roomData.password,
-        maxUsers: roomData.maxUsers,
-        isPrivate: roomData.isPrivate,
-        messageExpiration: roomData.messageExpiration,
-
-        invisibleMode: roomData.invisibleMode,
-        creatorId: roomData.creatorId,
-        creatorNickname: roomData.creatorNickname,
-        createdAt: roomData.createdAt,
-        expiresAt: roomData.expiresAt
-      };
-      
-      localStorage.setItem(`createdRoom_${roomData.id}`, JSON.stringify(roomDataForChat));
-      
       // Save user data for chat room (room creator)
       const userData = {
         userId: roomData.creatorId || `user_${Math.random().toString(36).substr(2, 9)}`,

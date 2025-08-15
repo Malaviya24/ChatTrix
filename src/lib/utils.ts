@@ -30,28 +30,100 @@ export function getUserAgent(request: NextRequest): string | undefined {
 }
 
 // Generate secure random string
-export function generateSecureString(length: number): string {
+export async function generateSecureString(length: number): Promise<string> {
+  if (length <= 0) {
+    throw new Error('Length must be positive');
+  }
+  
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  
+  // Use crypto.getRandomValues if available (browser) or crypto.randomBytes (Node.js)
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    // Browser environment
+    const randomValues = new Uint8Array(length);
+    crypto.getRandomValues(randomValues);
+    
+    for (let i = 0; i < length; i++) {
+      // Map random byte to character index using modulo
+      const charIndex = randomValues[i] % chars.length;
+      result += chars.charAt(charIndex);
+    }
+  } else {
+    // Node.js environment
+    try {
+      // Dynamic import for Node.js crypto
+      const crypto = await import('crypto');
+      const randomBytes = crypto.randomBytes(length);
+      
+      for (let i = 0; i < length; i++) {
+        const charIndex = randomBytes[i] % chars.length;
+        result += chars.charAt(charIndex);
+      }
+    } catch {
+      // Fallback to Math.random if crypto is not available
+      for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+    }
   }
+  
   return result;
 }
 
 // Generate unique room ID
-export function generateRoomId(): string {
+export async function generateRoomId(): Promise<string> {
   return generateSecureString(8);
 }
 
 // Generate unique user ID
-export function generateUserId(): string {
-  return 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+export async function generateUserId(): Promise<string> {
+  let randomPart: string;
+  
+  // Use crypto.getRandomValues if available (browser) or crypto.randomUUID (Node.js)
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    // Browser environment
+    const randomValues = new Uint8Array(9);
+    crypto.getRandomValues(randomValues);
+    randomPart = Array.from(randomValues, byte => byte.toString(36)).join('').substring(0, 9);
+  } else {
+    // Node.js environment
+    try {
+      // Dynamic import for Node.js crypto
+      const crypto = await import('crypto');
+      randomPart = crypto.randomUUID().replace(/-/g, '').substring(0, 9);
+    } catch {
+      // Fallback to Math.random if crypto is not available
+      randomPart = Math.random().toString(36).substring(2, 11);
+    }
+  }
+  
+  return 'user_' + randomPart + '_' + Date.now();
 }
 
 // Generate unique session ID
-export function generateSessionId(): string {
-  return 'session_' + Math.random().toString(36).substr(2, 9);
+export async function generateSessionId(): Promise<string> {
+  let randomPart: string;
+  
+  // Use crypto.getRandomValues if available (browser) or crypto.randomUUID (Node.js)
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    // Browser environment
+    const randomValues = new Uint8Array(9);
+    crypto.getRandomValues(randomValues);
+    randomPart = Array.from(randomValues, byte => byte.toString(36)).join('').substring(0, 9);
+  } else {
+    // Node.js environment
+    try {
+      // Dynamic import for Node.js crypto
+      const crypto = await import('crypto');
+      randomPart = crypto.randomUUID().replace(/-/g, '').substring(0, 9);
+    } catch {
+      // Fallback to Math.random if crypto is not available
+      randomPart = Math.random().toString(36).substring(0, 9);
+    }
+  }
+  
+  return 'session_' + randomPart;
 }
 
 // Validate room ID format

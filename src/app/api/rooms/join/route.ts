@@ -118,11 +118,12 @@ export async function POST(request: NextRequest) {
 
     // Generate user ID and session
     const userId = generateUserId();
+    // Create participant data
     const participantData = {
       userId,
       nickname: nicknameValidation.sanitized,
       avatar: avatar || '🦊',
-      sessionId: generateSessionId(),
+      sessionId: await generateSessionId(),
       ip: clientIP,
       joinedAt: new Date()
     };

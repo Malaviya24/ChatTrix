@@ -32,15 +32,28 @@ export function useLenis() {
     }
 
     // Poll for global Lenis to become available
+    let timerId: NodeJS.Timeout;
+    let isMounted = true;
+    
     const checkLenis = () => {
+      if (!isMounted) return;
+      
       if (globalLenis) {
         setLenis(globalLenis);
       } else {
-        setTimeout(checkLenis, 50);
+        timerId = setTimeout(checkLenis, 50);
       }
     };
 
     checkLenis();
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      if (timerId) {
+        clearTimeout(timerId);
+      }
+    };
   }, []);
 
   return lenis;

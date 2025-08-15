@@ -19,7 +19,7 @@ Chattrix implements multiple layers of security to protect against abuse, malici
 ### 3. IP-based Abuse Prevention
 - **Suspicious Activity Detection**: Monitors failed attempts and total activity (excluding room creation)
 - **Automatic Blocking**: Blocks IPs with >10 failed attempts in 5 minutes for non-creation actions
-- **Block Duration**: IPs remain blocked until manually unblocked
+- **Block Duration**: IPs remain blocked until manually unblocked. (Note: BLOCK_DURATION_MINUTES environment variable is currently unused.)
 - **Real-time Monitoring**: Continuous monitoring of all API requests
 
 ### 4. Access Logging
@@ -73,7 +73,7 @@ Access security statistics at `/api/security/stats`:
 # Room creation is unlimited - no rate limiting
 MAX_ROOMS_PER_IP_PER_HOUR=unlimited
 MAX_FAILED_ATTEMPTS_BEFORE_BLOCK=10
-BLOCK_DURATION_MINUTES=5
+# BLOCK_DURATION_MINUTES=5  # Currently unused - blocks are permanent until manually unblocked
 LOG_RETENTION_HOURS=24
 ```
 

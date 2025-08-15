@@ -7,7 +7,7 @@ interface PanicModeState {
   isEnabled: boolean;
   isActive: boolean;
   dataCleared: boolean;
-  emergencyExit: boolean;
+  emergencyExitEnabled: boolean;
   timestamp: Date | null;
 }
 
@@ -17,7 +17,7 @@ export function usePanicMode(roomId?: string, userId?: string) {
     isEnabled: false,
     isActive: false,
     dataCleared: false,
-    emergencyExit: false,
+    emergencyExitEnabled: false,
     timestamp: null,
   });
 
@@ -113,10 +113,10 @@ export function usePanicMode(roomId?: string, userId?: string) {
   }, []);
 
   // Emergency exit - close tab/window
-  const emergencyExit = useCallback(() => {
+  const triggerEmergencyExit = useCallback(() => {
     setPanicMode(prev => ({
       ...prev,
-      emergencyExit: true,
+      emergencyExitEnabled: true,
     }));
 
     // Clear all data first
@@ -139,7 +139,7 @@ export function usePanicMode(roomId?: string, userId?: string) {
       isEnabled: false,
       isActive: false,
       dataCleared: false,
-      emergencyExit: false,
+      emergencyExitEnabled: false,
       timestamp: null,
     });
 
@@ -178,13 +178,13 @@ export function usePanicMode(roomId?: string, userId?: string) {
       const exitBtn = overlay.querySelector('#exit-btn');
       const deactivateBtn = overlay.querySelector('#deactivate-btn');
 
-      exitBtn?.addEventListener('click', emergencyExit);
+      exitBtn?.addEventListener('click', triggerEmergencyExit);
       deactivateBtn?.addEventListener('click', () => {
         document.body.removeChild(overlay);
         deactivatePanicMode();
       });
     }
-  }, [emergencyExit, deactivatePanicMode]);
+  }, [triggerEmergencyExit, deactivatePanicMode]);
 
   // Activate panic mode
   const activatePanicMode = useCallback(async () => {
@@ -262,7 +262,7 @@ export function usePanicMode(roomId?: string, userId?: string) {
     ...panicMode,
     activatePanicMode,
     deactivatePanicMode,
-    emergencyExit,
+    emergencyExit: triggerEmergencyExit,
     clearAllData,
     checkRoomPanicStatus,
   };
