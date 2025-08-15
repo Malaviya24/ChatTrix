@@ -203,13 +203,18 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
          
          // Now connect to the socket
          const newSocket = io({
-           transports: ['websocket', 'polling'],
+           transports: ['polling', 'websocket'], // Prioritize polling for Vercel compatibility
            autoConnect: true,
            forceNew: true,
-           timeout: 20000,
+           timeout: 30000, // Increased for Vercel
            reconnection: true,
-           reconnectionAttempts: 5,
-           reconnectionDelay: 1000
+           reconnectionAttempts: 10, // Increased retry attempts
+           reconnectionDelay: 2000, // Increased delay
+           reconnectionDelayMax: 10000, // Max delay
+           // Vercel-specific optimizations
+           upgrade: true,
+           rememberUpgrade: false,
+           secure: true
          });
          
          socketRef.current = newSocket;
@@ -247,13 +252,18 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
          
          // Try direct connection as fallback
          const newSocket = io({
-           transports: ['websocket', 'polling'],
+           transports: ['polling', 'websocket'], // Prioritize polling for Vercel compatibility
            autoConnect: true,
            forceNew: true,
-           timeout: 20000,
+           timeout: 30000, // Increased for Vercel
            reconnection: true,
-           reconnectionAttempts: 5,
-           reconnectionDelay: 1000
+           reconnectionAttempts: 10, // Increased retry attempts
+           reconnectionDelay: 2000, // Increased delay
+           reconnectionDelayMax: 10000, // Max delay
+           // Vercel-specific optimizations
+           upgrade: true,
+           rememberUpgrade: false,
+           secure: true
          });
          
          socketRef.current = newSocket;

@@ -72,10 +72,16 @@ function initializeSocketIOServer(res: NextApiResponse) {
       origin: "*",
       methods: ["GET", "POST"]
     },
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'], // Prioritize polling for Vercel compatibility
     allowEIO3: true,
-    pingTimeout: 60000,
-    pingInterval: 25000
+    pingTimeout: 30000, // Reduced for Vercel
+    pingInterval: 10000, // Reduced for Vercel
+    upgradeTimeout: 10000, // Added timeout
+    maxHttpBufferSize: 1e6, // 1MB buffer
+    allowRequest: (req, callback) => {
+      // Allow all requests for now
+      callback(null, true);
+    }
   });
 
   // Store the io instance on the server
@@ -325,7 +331,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({
         status: isRunning ? 'running' : 'not_running',
         timestamp: new Date().toISOString(),
-        message: isRunning ? 'Socket.IO server is running' : 'Socket.IO server is not running'
+        message: isRunning ? 'Socket.IO server is running' : 'Socket.IO server is not running',
+        environment: process.env.NODE_ENV || 'development',
+        vercel: !!process.env.VERCEL
       });
     }
 
@@ -337,10 +345,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       initializeSocketIOServer(res);
     }
 
+    // Add CORS headers for Vercel
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
     res.end();
     
   } catch (error) {
     console.error('❌ Error in Socket.IO handler:', error);
-    res.status(500).json({ error: 'Socket.IO server setup failed', details: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({ 
+      error: 'Socket.IO server setup failed', 
+      details: error instanceof Error ? error.message : 'Unknown error',
+      environment: process.env.NODE_ENV || 'development',
+      vercel: !!process.env.VERCEL
+    });
   }
 }
