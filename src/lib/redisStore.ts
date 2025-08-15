@@ -32,7 +32,8 @@ class RedisStore {
     roomParticipants: new Map<string, Map<string, Participant>>(),
     userRooms: new Map<string, string>(),
     roomCreators: new Map<string, string>(),
-    roomMessages: new Map<string, Message[]>()
+    roomMessages: new Map<string, Message[]>(),
+    typingStatus: new Map<string, Map<string, { nickname: string; expiresAt: number }>>()
   };
   private isConnected = false;
 
@@ -47,10 +48,16 @@ class RedisStore {
         lazyConnect: true,
         connectTimeout: 10000,
         commandTimeout: 5000,
+        enableReadyCheck: true,
       });
 
       this.client.on('connect', () => {
         console.log('✅ Redis connected successfully');
+        this.isConnected = true;
+      });
+
+      this.client.on('ready', () => {
+        console.log('✅ Redis ready for commands');
         this.isConnected = true;
       });
 
@@ -61,6 +68,11 @@ class RedisStore {
 
       this.client.on('close', () => {
         console.log('🔌 Redis connection closed');
+        this.isConnected = false;
+      });
+
+      this.client.on('reconnecting', () => {
+        console.log('🔄 Redis reconnecting...');
         this.isConnected = false;
       });
 
@@ -305,12 +317,32 @@ class RedisStore {
         }
       } else {
         // Fallback: store in memory for typing status
-        const key = `room:${roomId}:typing:${userId}`;
+        if (!this.fallbackMaps.typingStatus) {
+          this.fallbackMaps.typingStatus = new Map<string, Map<string, { nickname: string; expiresAt: number }>>();
+        }
+        
+        if (!this.fallbackMaps.typingStatus.has(roomId)) {
+          this.fallbackMaps.typingStatus.set(roomId, new Map());
+        }
+        
+        const roomTyping = this.fallbackMaps.typingStatus.get(roomId)!;
+        
         if (isTyping) {
-          // Store in memory with expiration simulation
+          // Store typing status with expiration
+          roomTyping.set(userId, { 
+            nickname, 
+            expiresAt: Date.now() + 5000 
+          });
+          
+          // Auto-remove after 5 seconds
           setTimeout(() => {
-            // Auto-remove after 5 seconds
+            if (roomTyping.has(userId)) {
+              roomTyping.delete(userId);
+            }
           }, 5000);
+        } else {
+          // Remove typing status
+          roomTyping.delete(userId);
         }
       }
     } catch (error) {
@@ -338,8 +370,26 @@ class RedisStore {
 
         return typingUsers;
       } else {
-        // Fallback: return empty array if Redis is not available
-        return [];
+        // Fallback: use memory storage for typing status
+        if (!this.fallbackMaps.typingStatus || !this.fallbackMaps.typingStatus.has(roomId)) {
+          return [];
+        }
+        
+        const roomTyping = this.fallbackMaps.typingStatus.get(roomId)!;
+        const typingUsers: string[] = [];
+        const now = Date.now();
+        
+        // Clean up expired typing status and collect active ones
+        for (const [userId, data] of roomTyping.entries()) {
+          if (data.expiresAt > now && userId !== excludeUserId) {
+            typingUsers.push(data.nickname);
+          } else if (data.expiresAt <= now) {
+            // Remove expired typing status
+            roomTyping.delete(userId);
+          }
+        }
+        
+        return typingUsers;
       }
     } catch (error) {
       console.error('Redis getRoomTypingUsers error:', error);

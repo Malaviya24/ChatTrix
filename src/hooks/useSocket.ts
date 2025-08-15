@@ -23,6 +23,8 @@ interface User {
 
 interface UseSocketReturn {
   isConnected: boolean;
+  connectionStatus: 'connecting' | 'connected' | 'disconnected' | 'error';
+  connectionError: string | null;
   messages: Message[];
   participants: User[];
   typingUsers: string[];
@@ -36,6 +38,8 @@ interface UseSocketReturn {
 
 export function useSocket(roomId: string, userId: string, nickname: string, avatar: string, claimedCreatorStatus?: boolean): UseSocketReturn {
   const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [participants, setParticipants] = useState<User[]>([]);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -121,6 +125,8 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
         setParticipants(result.participants || []);
         setIsRoomCreator(result.isCreator || false);
         setIsConnected(true);
+        setConnectionStatus('connected');
+        setConnectionError(null);
         
         // Fetch existing messages when joining (only once)
         await fetchMessages();
@@ -142,6 +148,8 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
     } catch (error) {
       console.error('❌ Failed to join room:', error);
       setIsConnected(false);
+      setConnectionStatus('error');
+      setConnectionError(error instanceof Error ? error.message : 'Failed to join room');
     }
   }, [fetchMessages]);
 
@@ -259,9 +267,23 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
       const result = await makeApiCall('get-typing-status', { roomId });
       if (result.success && result.typingStatus) {
         setTypingUsers(result.typingStatus);
+      } else {
+        // Handle case where API returns success but no typing status
+        setTypingUsers([]);
       }
     } catch (error) {
       console.error('❌ Failed to fetch typing status:', error);
+      // Set empty typing users on error to prevent UI issues
+      setTypingUsers([]);
+      
+      // Log specific error details for debugging
+      if (error instanceof Error) {
+        if (error.message.includes('404')) {
+          console.warn('⚠️ Typing status endpoint not found - this might be a deployment issue');
+        } else if (error.message.includes('500')) {
+          console.warn('⚠️ Server error while fetching typing status - Redis might be unavailable');
+        }
+      }
     }
   }, [roomId]);
 
@@ -291,6 +313,8 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
       } catch (error) {
         console.error('❌ Polling failed:', error);
         setIsConnected(false);
+        setConnectionStatus('error');
+        setConnectionError(error instanceof Error ? error.message : 'Connection polling failed');
       }
     };
 
@@ -377,6 +401,8 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
 
   return {
     isConnected,
+    connectionStatus,
+    connectionError,
     messages,
     participants,
     typingUsers,
