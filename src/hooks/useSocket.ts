@@ -42,9 +42,10 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
   const [isRoomCreator, setIsRoomCreator] = useState(false);
   
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const messagePollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageIdRef = useRef<string>('');
 
-  // Function to make API calls to our Edge Runtime endpoint
+  // Function to make API calls to our API endpoint
   const makeApiCall = async (action: string, data: Record<string, unknown>) => {
     try {
       const response = await fetch('/api/socket', {
@@ -66,6 +67,29 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
     }
   };
 
+  // Function to fetch messages from the server
+  const fetchMessages = useCallback(async () => {
+    try {
+      const result = await makeApiCall('get-messages', { roomId });
+      if (result.success && result.messages) {
+        // Convert server messages to client format
+        const clientMessages: Message[] = result.messages.map((msg: Record<string, unknown>) => ({
+          ...msg,
+          isOwn: msg.userId === userId,
+          timestamp: new Date(msg.timestamp as string)
+        }));
+        
+        // Only update if we have new messages
+        if (clientMessages.length !== messages.length) {
+          setMessages(clientMessages);
+          console.log('📨 Fetched messages:', clientMessages.length);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch messages:', error);
+    }
+  }, [roomId, userId, messages.length]);
+
   // Join room function
   const joinRoom = useCallback(async (roomId: string, userId: string, nickname: string, avatar: string, isRoomCreator?: boolean) => {
     try {
@@ -75,6 +99,9 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
         setParticipants(result.participants || []);
         setIsRoomCreator(result.isCreator || false);
         setIsConnected(true);
+        
+        // Fetch existing messages when joining
+        await fetchMessages();
         
         // Add join notification message
         const joinMessage: Message = {
@@ -94,7 +121,7 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
       console.error('❌ Failed to join room:', error);
       setIsConnected(false);
     }
-  }, []);
+  }, [fetchMessages]);
 
   // Send message function
   const sendMessage = useCallback(async (message: string, options?: { isInvisible?: boolean }) => {
@@ -203,7 +230,7 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
     }
   }, [roomId, userId, isRoomCreator]);
 
-  // Polling mechanism to simulate real-time updates
+  // Polling mechanism for participants and room updates
   useEffect(() => {
     if (!isConnected || !roomId) return;
 
@@ -229,8 +256,8 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
       }
     };
 
-    // Poll every 2 seconds
-    pollingIntervalRef.current = setInterval(pollForUpdates, 2000);
+    // Poll every 3 seconds for participants
+    pollingIntervalRef.current = setInterval(pollForUpdates, 3000);
 
     return () => {
       if (pollingIntervalRef.current) {
@@ -238,6 +265,24 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
       }
     };
   }, [isConnected, roomId, userId, nickname, avatar, claimedCreatorStatus, participants, isRoomCreator]);
+
+  // Polling mechanism for new messages
+  useEffect(() => {
+    if (!isConnected || !roomId) return;
+
+    const pollForMessages = async () => {
+      await fetchMessages();
+    };
+
+    // Poll every 2 seconds for new messages
+    messagePollingIntervalRef.current = setInterval(pollForMessages, 2000);
+
+    return () => {
+      if (messagePollingIntervalRef.current) {
+        clearInterval(messagePollingIntervalRef.current);
+      }
+    };
+  }, [isConnected, roomId, fetchMessages]);
 
   // Initialize connection when component mounts
   useEffect(() => {
@@ -255,6 +300,9 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
     return () => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
+      }
+      if (messagePollingIntervalRef.current) {
+        clearInterval(messagePollingIntervalRef.current);
       }
       // Leave room on unmount
       leaveRoom(roomId, userId, nickname);

@@ -5,6 +5,17 @@ const roomParticipants = new Map<string, Map<string, { nickname: string; avatar:
 const userRooms = new Map<string, string>(); // userId -> roomId
 const roomCreators = new Map<string, string>(); // roomId -> creatorUserId
 
+// NEW: Store messages for each room
+const roomMessages = new Map<string, Array<{
+  id: string;
+  text: string;
+  userId: string;
+  nickname: string;
+  avatar: string;
+  timestamp: Date;
+  isInvisible?: boolean;
+}>>();
+
 interface SocketData {
   roomId: string;
   userId: string;
@@ -67,6 +78,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return handleJoinRoom(data, res);
         case 'send-message':
           return handleSendMessage(data, res);
+        case 'get-messages':
+          return handleGetMessages(data, res);
         case 'typing':
           return handleTyping(data, res);
         case 'leave-room':
@@ -137,7 +150,7 @@ function handleJoinRoom(data: SocketData, res: NextApiResponse) {
 }
 
 function handleSendMessage(data: MessageData, res: NextApiResponse) {
-  const { message, userId, nickname, avatar, isInvisible } = data;
+  const { roomId, message, userId, nickname, avatar, isInvisible } = data;
   
   const messageData = {
     id: Date.now().toString(),
@@ -146,14 +159,37 @@ function handleSendMessage(data: MessageData, res: NextApiResponse) {
     nickname,
     avatar,
     timestamp: new Date(),
-    isOwn: false,
     isInvisible: isInvisible || false
   };
+  
+  // Store message in room
+  if (!roomMessages.has(roomId)) {
+    roomMessages.set(roomId, []);
+  }
+  roomMessages.get(roomId)!.push(messageData);
+  
+  // Keep only last 100 messages to prevent memory issues
+  const messages = roomMessages.get(roomId)!;
+  if (messages.length > 100) {
+    roomMessages.set(roomId, messages.slice(-100));
+  }
   
   return res.status(200).json({
     success: true,
     message: messageData,
     messageId: messageData.id
+  });
+}
+
+function handleGetMessages(data: { roomId: string }, res: NextApiResponse) {
+  const { roomId } = data;
+  
+  // Get messages for the room
+  const messages = roomMessages.get(roomId) || [];
+  
+  return res.status(200).json({
+    success: true,
+    messages
   });
 }
 
@@ -180,6 +216,8 @@ function handleLeaveRoom(data: SocketData, res: NextApiResponse) {
     if (participants.size === 0) {
       roomParticipants.delete(roomId);
       roomCreators.delete(roomId);
+      // Clear room messages when room is empty
+      roomMessages.delete(roomId);
     }
   }
   
