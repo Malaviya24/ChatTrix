@@ -1,6 +1,4 @@
-import { NextRequest } from 'next/server';
-
-export const runtime = 'edge';
+import { NextApiRequest, NextApiResponse } from 'next';
 
 // Store room participants in memory (will reset on cold starts)
 const roomParticipants = new Map<string, Map<string, { nickname: string; avatar: string; joinedAt: Date }>>();
@@ -37,74 +35,62 @@ interface KickUserData {
   kickedBy: string;
 }
 
-export async function GET() {
-  try {
-    return new Response(JSON.stringify({
-      status: 'running',
-      timestamp: new Date().toISOString(),
-      message: 'Socket.IO server is running (Edge Runtime)',
-      environment: process.env.NODE_ENV || 'development',
-      vercel: !!process.env.VERCEL,
-      runtime: 'edge'
-    }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      }
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({
-      error: 'Socket.IO server setup failed',
-      details: error instanceof Error ? error.message : 'Unknown error',
-      environment: process.env.NODE_ENV || 'development',
-      vercel: !!process.env.VERCEL
-    }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
-    });
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Add CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
-}
 
-export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { action, data } = body;
-
-    switch (action) {
-      case 'join-room':
-        return handleJoinRoom(data);
-      case 'send-message':
-        return handleSendMessage(data);
-      case 'typing':
-        return handleTyping(data);
-      case 'leave-room':
-        return handleLeaveRoom(data);
-      case 'kick-user':
-        return handleKickUser(data);
-      default:
-        return new Response(JSON.stringify({ error: 'Unknown action' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+    if (req.method === 'GET') {
+      // Health check endpoint
+      return res.status(200).json({
+        status: 'running',
+        timestamp: new Date().toISOString(),
+        message: 'Socket API server is running',
+        environment: process.env.NODE_ENV || 'development',
+        vercel: !!process.env.VERCEL,
+        runtime: 'nodejs'
+      });
     }
+
+    if (req.method === 'POST') {
+      const { action, data } = req.body;
+
+      switch (action) {
+        case 'join-room':
+          return handleJoinRoom(data, res);
+        case 'send-message':
+          return handleSendMessage(data, res);
+        case 'typing':
+          return handleTyping(data, res);
+        case 'leave-room':
+          return handleLeaveRoom(data, res);
+        case 'kick-user':
+          return handleKickUser(data, res);
+        default:
+          return res.status(400).json({ error: 'Unknown action' });
+      }
+    }
+
+    // Method not allowed
+    return res.status(405).json({ error: 'Method not allowed' });
+    
   } catch (error) {
-    return new Response(JSON.stringify({
+    console.error('❌ API Error:', error);
+    return res.status(500).json({
       error: 'Request processing failed',
       details: error instanceof Error ? error.message : 'Unknown error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
     });
   }
 }
 
-function handleJoinRoom(data: SocketData) {
+function handleJoinRoom(data: SocketData, res: NextApiResponse) {
   const { roomId, userId, nickname, avatar, isRoomCreator } = data;
   
   // Leave previous room if any
@@ -142,18 +128,15 @@ function handleJoinRoom(data: SocketData) {
   // Check if user is room creator
   const isCreator = roomCreators.get(roomId) === userId;
   
-  return new Response(JSON.stringify({
+  return res.status(200).json({
     success: true,
     participants,
     isCreator,
     message: 'Successfully joined room'
-  }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
   });
 }
 
-function handleSendMessage(data: MessageData) {
+function handleSendMessage(data: MessageData, res: NextApiResponse) {
   const { message, userId, nickname, avatar, isInvisible } = data;
   
   const messageData = {
@@ -167,31 +150,25 @@ function handleSendMessage(data: MessageData) {
     isInvisible: isInvisible || false
   };
   
-  return new Response(JSON.stringify({
+  return res.status(200).json({
     success: true,
     message: messageData,
     messageId: messageData.id
-  }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
   });
 }
 
-function handleTyping(data: TypingData) {
+function handleTyping(data: TypingData, res: NextApiResponse) {
   const { userId, nickname, isTyping } = data;
   
-  return new Response(JSON.stringify({
+  return res.status(200).json({
     success: true,
     typing: isTyping,
     userId,
     nickname
-  }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
   });
 }
 
-function handleLeaveRoom(data: SocketData) {
+function handleLeaveRoom(data: SocketData, res: NextApiResponse) {
   const { roomId, userId } = data;
   
   userRooms.delete(userId);
@@ -206,16 +183,13 @@ function handleLeaveRoom(data: SocketData) {
     }
   }
   
-  return new Response(JSON.stringify({
+  return res.status(200).json({
     success: true,
     message: 'Successfully left room'
-  }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
   });
 }
 
-function handleKickUser(data: KickUserData) {
+function handleKickUser(data: KickUserData, res: NextApiResponse) {
   const { roomId, targetUserId, kickedBy } = data;
   
   // Check if the user is the room creator
@@ -227,30 +201,13 @@ function handleKickUser(data: KickUserData) {
     participants?.delete(targetUserId);
     userRooms.delete(targetUserId);
     
-    return new Response(JSON.stringify({
+    return res.status(200).json({
       success: true,
       message: 'User kicked successfully'
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
     });
   } else {
-    return new Response(JSON.stringify({
+    return res.status(403).json({
       error: 'Only room creator can kick users'
-    }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' }
     });
   }
-}
-
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
-    }
-  });
 }
