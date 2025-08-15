@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, TimerReset, ScanSearch, Ghost, Zap, Heart, Brain, MessageCircle, Smartphone, Monitor, Globe, Lock, Eye, AlertTriangle, Users, Settings, Link, Trash2, X, Target, Crown, Info, ShieldX, FileText, Timer, type LucideIcon } from 'lucide-react';
+import { ShieldCheck, TimerReset, ScanSearch, Ghost, Zap, Heart, Brain, MessageCircle, Smartphone, Monitor, Globe, Lock, Eye, AlertTriangle, Users, Settings, Link, Trash2, X, Target, Crown, Info, ShieldX, FileText, Timer, ArrowUp, type LucideIcon } from 'lucide-react';
 
 // Icon mapping
 const iconMap: Record<string, LucideIcon> = {
@@ -34,7 +34,8 @@ const iconMap: Record<string, LucideIcon> = {
   'info': Info,
   'shield-x': ShieldX,
   'file-text': FileText,
-  'timer': Timer
+  'timer': Timer,
+  'arrow-up': ArrowUp
 };
 
 // Size mapping

@@ -1,0 +1,21 @@
+{
+  "name": "ChatTrix - Secure Chat Rooms",
+  "short_name": "ChatTrix",
+  "description": "A secure, real-time chat room application with end-to-end encryption",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/next.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["social", "communication", "productivity"],
+  "lang": "en",
+  "dir": "ltr"
+}

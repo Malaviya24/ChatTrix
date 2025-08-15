@@ -100,6 +100,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).end();
   }
 
+  // Log incoming request for debugging
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`🔍 API Request: ${req.method} ${req.url}`);
+  }
+
   try {
     if (req.method === 'GET') {
       // Health check endpoint with Redis status
@@ -267,6 +272,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Process the validated request
       try {
+        // Check Redis connection before processing
+        const redisHealth = await redisStore.healthCheck();
+        if (redisHealth.status !== 'healthy' && process.env.NODE_ENV !== 'production') {
+          console.warn(`⚠️ Redis status: ${redisHealth.status} - ${redisHealth.details}`);
+        }
+
         switch (action) {
           case 'join-room':
             return await handleJoinRoom(validatedData as SocketData, res);
