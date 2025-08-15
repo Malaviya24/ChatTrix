@@ -170,14 +170,12 @@ export function ResponsiveButton({
   variant = 'primary',
   size = 'md',
   fullWidth = false,
-  className = '',
   ...props
 }: {
   children: React.ReactNode;
   variant?: 'primary' | 'secondary' | 'danger' | 'success';
   size?: 'sm' | 'md' | 'lg';
   fullWidth?: boolean;
-  className?: string;
   [key: string]: unknown;
 }) {
   const baseClasses = 'font-bold rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 hover:scale-105 transform';
@@ -211,12 +209,10 @@ export function ResponsiveButton({
 export function ResponsiveInput({
   label,
   error,
-  className = '',
   ...props
 }: {
   label?: string;
   error?: string;
-  className?: string;
   [key: string]: unknown;
 }) {
   return (

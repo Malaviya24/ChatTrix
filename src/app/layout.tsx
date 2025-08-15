@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   creator: 'Chattrix',
   publisher: 'Chattrix',
   robots: 'index, follow',
+  metadataBase: new URL('https://chattrix.com'),
   openGraph: {
     title: 'Chattrix - Secure Chat Made Simple',
     description: 'Experience the future of secure communication with Chattrix. Create private chat rooms instantly, no registration required.',
@@ -35,8 +36,6 @@ export const metadata: Metadata = {
     description: 'Experience the future of secure communication with Chattrix. Create private chat rooms instantly, no registration required.',
     images: ['/og-image.jpg'],
   },
-  viewport: 'width=device-width, initial-scale=1',
-  themeColor: '#1e40af',
   manifest: '/manifest.json',
   icons: {
     icon: '/favicon.ico',
