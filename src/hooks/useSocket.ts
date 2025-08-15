@@ -112,6 +112,9 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
   // Join room function
   const joinRoom = useCallback(async (roomId: string, userId: string, nickname: string, avatar: string, isRoomCreator?: boolean) => {
     try {
+      // Debug logging
+      console.log('🔌 Socket - Joining room with data:', { roomId, userId, nickname, avatar, isRoomCreator });
+      
       const result = await makeApiCall('join-room', { roomId, userId, nickname, avatar, isRoomCreator });
       
       if (result.success) {
