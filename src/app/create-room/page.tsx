@@ -101,7 +101,8 @@ export default function CreateRoomPage() {
         const userData = {
           userId,
           nickname: 'Room Creator',
-          avatar
+          avatar,
+          isRoomCreator: true // Room creator has creator privileges
         };
         localStorage.setItem(`chatRoom_${data.room.id}`, JSON.stringify(userData));
         

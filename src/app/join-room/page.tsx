@@ -176,7 +176,8 @@ function JoinRoomContent() {
         const userData = {
           userId: data.userId,
           nickname: formData.nickname,
-          avatar: formData.avatar
+          avatar: formData.avatar,
+          isRoomCreator: false // Users joining existing rooms are not creators
         };
         localStorage.setItem(`chatRoom_${formData.roomId}`, JSON.stringify(userData));
         
