@@ -14,6 +14,55 @@ import {
 } from '../../src/lib/validation';
 import { z } from 'zod';
 
+// Utility function to redact sensitive fields from data
+function redactSensitiveData(data: any): any {
+  if (!data || typeof data !== 'object') {
+    return data;
+  }
+  
+  const redacted = { ...data };
+  
+  // Redact sensitive fields
+  if ('message' in redacted) {
+    redacted.message = '[REDACTED]';
+  }
+  if ('nickname' in redacted) {
+    redacted.nickname = '[REDACTED]';
+  }
+  if ('userId' in redacted) {
+    redacted.userId = '[REDACTED]';
+  }
+  if ('targetUserId' in redacted) {
+    redacted.targetUserId = '[REDACTED]';
+  }
+  if ('kickedBy' in redacted) {
+    redacted.kickedBy = '[REDACTED]';
+  }
+  
+  return redacted;
+}
+
+// Utility function for environment-gated logging
+function logDebug(message: string, data?: any) {
+  if (process.env.NODE_ENV !== 'production') {
+    if (data) {
+      console.log(message, data);
+    } else {
+      console.log(message);
+    }
+  }
+}
+
+function logProduction(message: string, metadata?: Record<string, any>) {
+  // Production logging - minimal context, no sensitive data
+  const logData = {
+    timestamp: new Date().toISOString(),
+    message,
+    ...metadata
+  };
+  console.log('🔍 Socket API:', JSON.stringify(logData));
+}
+
 // Helper function to create consistent error responses for Pages Router
 function createErrorResponse(
   res: NextApiResponse,
@@ -84,7 +133,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Ensure body is parsed as JSON
         parsedBody = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       } catch (parseError) {
-        console.error('❌ JSON parse error:', parseError);
+        if (process.env.NODE_ENV === 'production') {
+          logProduction('JSON parse error', { 
+            hasMessage: parseError instanceof Error && !!parseError.message,
+            errorType: parseError instanceof Error ? parseError.constructor.name : 'Unknown'
+          });
+        } else {
+          console.error('❌ JSON parse error:', parseError);
+        }
         return createErrorResponse(
           res,
           400,
@@ -137,9 +193,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const { action, data } = parsedBody;
       let validatedData;
       
-      // Debug logging
-      console.log('🔍 Socket API - Action:', action);
-      console.log('🔍 Socket API - Data:', JSON.stringify(data, null, 2));
+      // Environment-gated logging with redacted sensitive data
+      if (process.env.NODE_ENV === 'production') {
+        logProduction('Action received', { action, dataSize: JSON.stringify(data).length });
+      } else {
+        logDebug('🔍 Socket API - Action:', action);
+        logDebug('🔍 Socket API - Raw Data (REDACTED):', redactSensitiveData(data));
+      }
       
       try {
         switch (action) {
@@ -181,7 +241,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       } catch (validationError) {
         if (validationError instanceof z.ZodError) {
-          console.error('❌ Action data validation failed:', validationError.issues);
+          if (process.env.NODE_ENV === 'production') {
+            logProduction('Action data validation failed', { 
+              action, 
+              errorCount: validationError.issues.length,
+              firstError: validationError.issues[0]?.message 
+            });
+          } else {
+            console.error('❌ Action data validation failed:', validationError.issues);
+          }
           return createErrorResponse(
             res,
             400,
@@ -223,7 +291,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             );
         }
       } catch (actionError) {
-        console.error(`❌ Error processing action '${action}':`, actionError);
+        if (process.env.NODE_ENV === 'production') {
+          logProduction('Action processing failed', { 
+            action, 
+            errorType: actionError instanceof Error ? actionError.constructor.name : 'Unknown',
+            hasMessage: actionError instanceof Error && !!actionError.message
+          });
+        } else {
+          console.error(`❌ Error processing action '${action}':`, actionError);
+        }
         return createErrorResponse(
           res,
           500,
@@ -244,33 +320,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
     
   } catch (error) {
-    console.error('❌ API Error:', error);
-    
-    // Log the full error for debugging but don't expose sensitive details
+    // Extract error information for logging and response
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     const errorStack = error instanceof Error ? error.stack : undefined;
     const errorName = error instanceof Error ? error.name : 'UnknownError';
     
-    // Enhanced server-side logging with structured error information
-    console.error(`❌ Error Details:`, {
-      name: errorName,
-      message: errorMessage,
-      stack: errorStack,
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'unknown',
-      url: req.url,
-      method: req.method,
-      userAgent: req.headers['user-agent'] || 'unknown'
-    });
-    
-    // Ensure internal errors are logged server-side but not leaked to client
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Full error stack:', errorStack);
-      console.error('Request details:', {
-        body: req.body,
-        headers: req.headers,
-        query: req.query
+    if (process.env.NODE_ENV === 'production') {
+      logProduction('API Error occurred', { 
+        errorType: error instanceof Error ? error.constructor.name : 'Unknown',
+        hasMessage: error instanceof Error && !!error.message,
+        url: req.url,
+        method: req.method
       });
+    } else {
+      console.error('❌ API Error:', error);
+      
+      // Enhanced server-side logging with structured error information
+      console.error(`❌ Error Details:`, {
+        name: errorName,
+        message: errorMessage,
+        stack: errorStack,
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'unknown',
+        url: req.url,
+        method: req.method,
+        userAgent: req.headers['user-agent'] || 'unknown'
+      });
+      
+      // Ensure internal errors are logged server-side but not leaked to client
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Full error stack:', errorStack);
+        console.error('Request details:', {
+          body: req.body,
+          headers: req.headers,
+          query: req.query
+        });
+      }
     }
     
     // Use the consistent error response helper function
@@ -297,17 +382,31 @@ async function handleJoinRoom(data: SocketData, res: NextApiResponse) {
         // First remove user from room participants, then remove user-room mapping
         await redisStore.removeRoomParticipant(previousRoom, userId);
         await redisStore.removeUserRoom(userId);
-      } catch (error) {
-        console.error('❌ Error leaving previous room:', error);
-        // Try to rollback: re-add user-room mapping if participant removal succeeded but user-room removal failed
-        try {
-          const isStillParticipant = await redisStore.hasRoomParticipant(previousRoom, userId);
-          if (isStillParticipant) {
-            await redisStore.setUserRoom(userId, previousRoom);
+              } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            logProduction('Error leaving previous room', { 
+              hasMessage: error instanceof Error && !!error.message,
+              errorType: error instanceof Error ? error.constructor.name : 'Unknown'
+            });
+          } else {
+            console.error('❌ Error leaving previous room:', error);
           }
-        } catch (rollbackError) {
-          console.error('❌ Rollback failed:', rollbackError);
-        }
+          // Try to rollback: re-add user-room mapping if participant removal succeeded but user-room removal failed
+          try {
+            const isStillParticipant = await redisStore.hasRoomParticipant(previousRoom, userId);
+            if (isStillParticipant) {
+              await redisStore.setUserRoom(userId, previousRoom);
+            }
+          } catch (rollbackError) {
+            if (process.env.NODE_ENV === 'production') {
+              logProduction('Rollback failed', { 
+                hasMessage: rollbackError instanceof Error && !!rollbackError.message,
+                errorType: rollbackError instanceof Error ? rollbackError.constructor.name : 'Unknown'
+              });
+            } else {
+              console.error('❌ Rollback failed:', rollbackError);
+            }
+          }
         // Continue with join operation even if cleanup failed
       }
     }
@@ -351,7 +450,14 @@ async function handleJoinRoom(data: SocketData, res: NextApiResponse) {
       message: 'Successfully joined room'
     });
   } catch (error) {
-    console.error('❌ handleJoinRoom error:', error);
+    if (process.env.NODE_ENV === 'production') {
+      logProduction('handleJoinRoom error', { 
+        hasMessage: error instanceof Error && !!error.message,
+        errorType: error instanceof Error ? error.constructor.name : 'Unknown'
+      });
+    } else {
+      console.error('❌ handleJoinRoom error:', error);
+    }
     return createErrorResponse(
       res,
       500,
@@ -398,7 +504,14 @@ async function handleSendMessage(data: MessageData, res: NextApiResponse) {
       messageId: messageData.id
     });
   } catch (error) {
-    console.error('❌ handleSendMessage error:', error);
+    if (process.env.NODE_ENV === 'production') {
+      logProduction('handleSendMessage error', { 
+        hasMessage: error instanceof Error && !!error.message,
+        errorType: error instanceof Error ? error.constructor.name : 'Unknown'
+      });
+    } else {
+      console.error('❌ handleSendMessage error:', error);
+    }
     return createErrorResponse(
       res,
       500,
@@ -422,7 +535,14 @@ async function handleGetMessages(data: GetMessagesData, res: NextApiResponse) {
       messages
     });
   } catch (error) {
-    console.error('❌ handleGetMessages error:', error);
+    if (process.env.NODE_ENV === 'production') {
+      logProduction('handleGetMessages error', { 
+        hasMessage: error instanceof Error && !!error.message,
+        errorType: error instanceof Error ? error.constructor.name : 'Unknown'
+      });
+    } else {
+      console.error('❌ handleGetMessages error:', error);
+    }
     return createErrorResponse(
       res,
       500,
@@ -461,7 +581,14 @@ async function handleTyping(data: TypingData, res: NextApiResponse) {
       typingUsers // Return other users who are typing
     });
   } catch (error) {
-    console.error('❌ handleTyping error:', error);
+    if (process.env.NODE_ENV === 'production') {
+      logProduction('handleTyping error', { 
+        hasMessage: error instanceof Error && !!error.message,
+        errorType: error instanceof Error ? error.constructor.name : 'Unknown'
+      });
+    } else {
+      console.error('❌ handleTyping error:', error);
+    }
     return createErrorResponse(
       res,
       500,
@@ -499,7 +626,14 @@ async function handleLeaveRoom(data: SocketData, res: NextApiResponse) {
       message: 'Successfully left room'
     });
   } catch (error) {
-    console.error('❌ handleLeaveRoom error:', error);
+    if (process.env.NODE_ENV === 'production') {
+      logProduction('handleLeaveRoom error', { 
+        hasMessage: error instanceof Error && !!error.message,
+        errorType: error instanceof Error ? error.constructor.name : 'Unknown'
+      });
+    } else {
+      console.error('❌ handleLeaveRoom error:', error);
+    }
     return createErrorResponse(
       res,
       500,
@@ -564,7 +698,14 @@ async function handleKickUser(data: KickUserData, res: NextApiResponse) {
       await redisStore.removeUserRoom(targetUserId);
       await redisStore.removeRoomParticipant(roomId, targetUserId);
     } catch (error) {
-      console.error('❌ Error kicking user:', error);
+      if (process.env.NODE_ENV === 'production') {
+        logProduction('Error kicking user', { 
+          hasMessage: error instanceof Error && !!error.message,
+          errorType: error instanceof Error ? error.constructor.name : 'Unknown'
+        });
+      } else {
+        console.error('❌ Error kicking user:', error);
+      }
       // Try to rollback: re-add user-room mapping if user-room removal succeeded but participant removal failed
       try {
         const userRoom = await redisStore.getUserRoom(targetUserId);
@@ -573,7 +714,14 @@ async function handleKickUser(data: KickUserData, res: NextApiResponse) {
           await redisStore.setUserRoom(targetUserId, roomId);
         }
       } catch (rollbackError) {
-        console.error('❌ Rollback failed:', rollbackError);
+        if (process.env.NODE_ENV === 'production') {
+          logProduction('Rollback failed', { 
+            hasMessage: rollbackError instanceof Error && !!rollbackError.message,
+            errorType: rollbackError instanceof Error ? rollbackError.constructor.name : 'Unknown'
+          });
+        } else {
+          console.error('❌ Rollback failed:', rollbackError);
+        }
       }
       throw error; // Re-throw to trigger error response
     }
@@ -583,7 +731,14 @@ async function handleKickUser(data: KickUserData, res: NextApiResponse) {
       message: 'User kicked successfully'
     });
   } catch (error) {
-    console.error('❌ handleKickUser error:', error);
+    if (process.env.NODE_ENV === 'production') {
+      logProduction('handleKickUser error', { 
+        hasMessage: error instanceof Error && !!error.message,
+        errorType: error instanceof Error ? error.constructor.name : 'Unknown'
+      });
+    } else {
+      console.error('❌ handleKickUser error:', error);
+    }
     return createErrorResponse(
       res,
       500,
@@ -616,7 +771,14 @@ async function handleGetTypingStatus(data: GetMessagesData, res: NextApiResponse
       typingStatus
     });
   } catch (error) {
-    console.error('❌ handleGetTypingStatus error:', error);
+    if (process.env.NODE_ENV === 'production') {
+      logProduction('handleGetTypingStatus error', { 
+        hasMessage: error instanceof Error && !!error.message,
+        errorType: error instanceof Error ? error.constructor.name : 'Unknown'
+      });
+    } else {
+      console.error('❌ handleGetTypingStatus error:', error);
+    }
     return createErrorResponse(
       res,
       500,
