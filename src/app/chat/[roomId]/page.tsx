@@ -177,6 +177,18 @@ export default function ChatRoomPage() {
     };
   }, []);
 
+  // Keyboard shortcuts for participants modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showParticipants) {
+        setShowParticipants(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showParticipants]);
+
 
 
   // Handle send message
@@ -394,11 +406,12 @@ export default function ChatRoomPage() {
             
             <button
               onClick={() => setShowParticipants(!showParticipants)}
-              className="sm:hidden px-2 sm:px-3 py-1.5 sm:py-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-lg text-xs"
+              className="px-2 sm:px-3 py-1.5 sm:py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-400 rounded-lg text-xs font-semibold transition-all"
             >
               <span className="flex items-center gap-1">
                 <AppIcon name="users" size="sm" className="text-blue-400" />
-                {participants.length}
+                <span className="hidden sm:inline">View Participants</span>
+                <span className="sm:hidden">{participants.length}</span>
               </span>
             </button>
           </div>
@@ -645,17 +658,17 @@ export default function ChatRoomPage() {
         </div>
       </div>
 
-      {/* Mobile Participants Modal */}
+      {/* Participants Modal - Mobile & Desktop */}
       <AnimatePresence>
         {showParticipants && (
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 lg:hidden"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
             onClick={() => setShowParticipants(false)}
           >
-            <div className="absolute bottom-0 left-0 right-0 bg-white/10 backdrop-blur-sm rounded-t-3xl border border-white/20 p-4 sm:p-6 max-h-[70vh] overflow-y-auto">
+            <div className="absolute bottom-0 left-0 right-0 lg:top-1/2 lg:left-1/2 lg:right-auto lg:bottom-auto lg:transform lg:-translate-x-1/2 lg:-translate-y-1/2 bg-white/10 backdrop-blur-sm rounded-t-3xl lg:rounded-3xl border border-white/20 p-4 sm:p-6 max-h-[70vh] lg:max-h-[80vh] lg:w-[500px] overflow-y-auto">
               {/* Admin Panel for Room Creator */}
               {isRoomCreator && (
                 <div className="mb-4 p-3 bg-gradient-to-r from-yellow-600/20 to-orange-600/20 border border-yellow-500/30 rounded-xl">
