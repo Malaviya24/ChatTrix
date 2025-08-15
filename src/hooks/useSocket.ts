@@ -79,16 +79,35 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
           timestamp: new Date(msg.timestamp as string)
         }));
         
-        // Only update if we have new messages
-        if (clientMessages.length !== messages.length) {
-          setMessages(clientMessages);
-          console.log('📨 Fetched messages:', clientMessages.length);
-        }
+        // Only update if we have new messages (compare content, not just length)
+        setMessages(prevMessages => {
+          // Check if messages are actually different
+          if (prevMessages.length !== clientMessages.length) {
+            console.log('📨 Fetched messages:', clientMessages.length);
+            return clientMessages;
+          }
+          
+          // Check if any message content has changed
+          const hasChanges = clientMessages.some((newMsg, index) => {
+            const prevMsg = prevMessages[index];
+            return !prevMsg || 
+                   prevMsg.text !== newMsg.text || 
+                   prevMsg.userId !== newMsg.userId ||
+                   prevMsg.timestamp.toString() !== newMsg.timestamp.toString();
+          });
+          
+          if (hasChanges) {
+            console.log('📨 Messages updated:', clientMessages.length);
+            return clientMessages;
+          }
+          
+          return prevMessages; // No changes, keep existing messages
+        });
       }
     } catch (error) {
       console.error('❌ Failed to fetch messages:', error);
     }
-  }, [roomId, userId, messages.length]);
+  }, [roomId, userId]);
 
   // Join room function
   const joinRoom = useCallback(async (roomId: string, userId: string, nickname: string, avatar: string, isRoomCreator?: boolean) => {
@@ -100,7 +119,7 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
         setIsRoomCreator(result.isCreator || false);
         setIsConnected(true);
         
-        // Fetch existing messages when joining
+        // Fetch existing messages when joining (only once)
         await fetchMessages();
         
         // Add join notification message
@@ -311,13 +330,13 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
 
   // Message expiry cleanup - automatically remove expired messages after 10 minutes
   useEffect(() => {
-    if (messages.length === 0) return;
-
     const interval = setInterval(() => {
       const now = new Date();
       const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
       
       setMessages(prev => {
+        if (prev.length === 0) return prev;
+        
         const filtered = prev.filter(message => {
           const messageTime = typeof message.timestamp === 'string' 
             ? new Date(message.timestamp) 
@@ -335,7 +354,7 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
     }, 30000); // Check every 30 seconds
 
     return () => clearInterval(interval);
-  }, [messages]);
+  }, []); // No dependencies - run once on mount
 
   return {
     isConnected,
