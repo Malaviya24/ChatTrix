@@ -11,32 +11,37 @@ export const ActionSchema = z.enum([
   'get-typing-status'
 ]);
 
+// Reusable validation schemas
+export const NicknameSchema = z.string()
+  .min(1, 'Nickname is required')
+  .max(50, 'Nickname too long')
+  .transform(val => val.normalize('NFC')) // Normalize to NFC
+  .refine(val => /^[\p{Letter}\p{Number}\p{Mark}\p{Zs}\-_]+$/u.test(val), 'Nickname contains invalid characters')
+  .refine(val => {
+    // Count grapheme clusters using Intl.Segmenter
+    if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+      const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+      const segments = Array.from(segmenter.segment(val));
+      return segments.length >= 1 && segments.length <= 50;
+    }
+    // Fallback for environments without Intl.Segmenter
+    return val.length >= 1 && val.length <= 50;
+  }, 'Nickname must be between 1 and 50 characters')
+  .refine(val => !/[\p{C}]/u.test(val), 'Nickname contains control characters');
+
+export const AvatarSchema = z.union([
+  z.string().url('Invalid avatar URL'),
+  z.string().min(1, 'Avatar is required').max(50, 'Avatar too long').refine(() => {
+    // Allow emojis and basic text - be more permissive for emoji characters
+    return true; // Allow any string that's not a URL, as long as it's 1-50 chars
+  }, 'Avatar contains invalid characters')
+]);
+
 export const SocketDataSchema = z.object({
   roomId: z.string().min(1, 'Room ID is required').max(100, 'Room ID too long'),
   userId: z.string().min(1, 'User ID is required').max(100, 'User ID too long'),
-  nickname: z.string()
-    .min(1, 'Nickname is required')
-    .max(50, 'Nickname too long')
-    .transform(val => val.normalize('NFC')) // Normalize to NFC
-    .refine(val => /^[\p{Letter}\p{Number}\p{Mark}\p{Zs}\-_]+$/u.test(val), 'Nickname contains invalid characters')
-    .refine(val => {
-      // Count grapheme clusters using Intl.Segmenter
-      if (typeof Intl !== 'undefined' && Intl.Segmenter) {
-        const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-        const segments = Array.from(segmenter.segment(val));
-        return segments.length >= 1 && segments.length <= 50;
-      }
-      // Fallback for environments without Intl.Segmenter
-      return val.length >= 1 && val.length <= 50;
-    }, 'Nickname must be between 1 and 50 characters')
-    .refine(val => !/[\p{C}]/u.test(val), 'Nickname contains control characters'),
-  avatar: z.union([
-    z.string().url('Invalid avatar URL'),
-    z.string().min(1, 'Avatar is required').max(50, 'Avatar too long').refine(val => {
-      // Allow emojis and basic text - be more permissive for emoji characters
-      return true; // Allow any string that's not a URL, as long as it's 1-50 chars
-    }, 'Avatar contains invalid characters')
-  ]),
+  nickname: NicknameSchema,
+  avatar: AvatarSchema,
   isRoomCreator: z.boolean().optional()
 });
 
@@ -44,51 +49,15 @@ export const MessageDataSchema = z.object({
   roomId: z.string().min(1, 'Room ID is required').max(100, 'Room ID too long'),
   message: z.string().min(1, 'Message is required').max(1000, 'Message too long'),
   userId: z.string().min(1, 'User ID is required').max(100, 'User ID too long'),
-  nickname: z.string()
-    .min(1, 'Nickname is required')
-    .max(50, 'Nickname too long')
-    .transform(val => val.normalize('NFC')) // Normalize to NFC
-    .refine(val => /^[\p{Letter}\p{Number}\p{Mark}\p{Zs}\-_]+$/u.test(val), 'Nickname contains invalid characters')
-    .refine(val => {
-      // Count grapheme clusters using Intl.Segmenter
-      if (typeof Intl !== 'undefined' && Intl.Segmenter) {
-        const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-        const segments = Array.from(segmenter.segment(val));
-        return segments.length >= 1 && segments.length <= 50;
-      }
-      // Fallback for environments without Intl.Segmenter
-      return val.length >= 1 && val.length <= 50;
-    }, 'Nickname must be between 1 and 50 characters')
-    .refine(val => !/[\p{C}]/u.test(val), 'Nickname contains control characters'),
-  avatar: z.union([
-    z.string().url('Invalid avatar URL'),
-    z.string().min(1, 'Avatar is required').max(50, 'Avatar too long').refine(val => {
-      // Allow emojis and basic text - be more permissive for emoji characters
-      return true; // Allow any string that's not a URL, as long as it's 1-50 chars
-    }, 'Avatar contains invalid characters')
-  ]),
+  nickname: NicknameSchema,
+  avatar: AvatarSchema,
   isInvisible: z.boolean().optional()
 });
 
 export const TypingDataSchema = z.object({
   roomId: z.string().min(1, 'Room ID is required').max(100, 'Room ID too long'),
   userId: z.string().min(1, 'User ID is required').max(100, 'User ID too long'),
-  nickname: z.string()
-    .min(1, 'Nickname is required')
-    .max(50, 'Nickname too long')
-    .transform(val => val.normalize('NFC')) // Normalize to NFC
-    .refine(val => /^[\p{Letter}\p{Number}\p{Mark}\p{Zs}\-_]+$/u.test(val), 'Nickname contains invalid characters')
-    .refine(val => {
-      // Count grapheme clusters using Intl.Segmenter
-      if (typeof Intl !== 'undefined' && Intl.Segmenter) {
-        const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-        const segments = Array.from(segmenter.segment(val));
-        return segments.length >= 1 && segments.length <= 50;
-      }
-      // Fallback for environments without Intl.Segmenter
-      return val.length >= 1 && val.length <= 50;
-    }, 'Nickname must be between 1 and 50 characters')
-    .refine(val => !/[\p{C}]/u.test(val), 'Nickname contains control characters'),
+  nickname: NicknameSchema,
   isTyping: z.boolean()
 });
 
