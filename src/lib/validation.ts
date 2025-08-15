@@ -32,7 +32,10 @@ export const SocketDataSchema = z.object({
     .refine(val => !/[\p{C}]/u.test(val), 'Nickname contains control characters'),
   avatar: z.union([
     z.string().url('Invalid avatar URL'),
-    z.string().min(1, 'Avatar is required').max(10, 'Avatar too long')
+    z.string().min(1, 'Avatar is required').max(50, 'Avatar too long').refine(val => {
+      // Allow emojis and basic text - be more permissive for emoji characters
+      return true; // Allow any string that's not a URL, as long as it's 1-50 chars
+    }, 'Avatar contains invalid characters')
   ]),
   isRoomCreator: z.boolean().optional()
 });
@@ -59,7 +62,10 @@ export const MessageDataSchema = z.object({
     .refine(val => !/[\p{C}]/u.test(val), 'Nickname contains control characters'),
   avatar: z.union([
     z.string().url('Invalid avatar URL'),
-    z.string().min(1, 'Avatar is required').max(10, 'Avatar too long')
+    z.string().min(1, 'Avatar is required').max(50, 'Avatar too long').refine(val => {
+      // Allow emojis and basic text - be more permissive for emoji characters
+      return true; // Allow any string that's not a URL, as long as it's 1-50 chars
+    }, 'Avatar contains invalid characters')
   ]),
   isInvisible: z.boolean().optional()
 });

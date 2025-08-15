@@ -137,6 +137,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const { action, data } = parsedBody;
       let validatedData;
       
+      // Debug logging
+      console.log('🔍 Socket API - Action:', action);
+      console.log('🔍 Socket API - Data:', JSON.stringify(data, null, 2));
+      
       try {
         switch (action) {
           case 'join-room':

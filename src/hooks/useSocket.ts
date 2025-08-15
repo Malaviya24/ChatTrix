@@ -329,7 +329,7 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
     console.log('🔌 Initializing HTTP-based connection...');
     
     // Join room immediately
-    joinRoom(roomId, userId, nickname, avatar, claimedCreatorStatus);
+    joinRoom(roomId, userId, nickname, avatar, claimedCreatorStatus || false);
 
     // Cleanup on unmount
     return () => {
