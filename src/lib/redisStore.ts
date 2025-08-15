@@ -33,7 +33,7 @@ class RedisStore {
     userRooms: new Map<string, string>(),
     roomCreators: new Map<string, string>(),
     roomMessages: new Map<string, Message[]>(),
-    typingStatus: new Map<string, Map<string, { nickname: string; expiresAt: number }>>()
+    typingStatus: new Map<string, Map<string, { nickname: string; expiresAt: number; timerId?: NodeJS.Timeout }>>()
   };
   private isConnected = false;
 
@@ -309,42 +309,48 @@ class RedisStore {
     try {
       if (this.isConnected && this.client) {
         if (isTyping) {
-          // Set typing status with expiration (5 seconds)
-          await this.client.setex(`room:${roomId}:typing:${userId}`, 5, nickname);
+          // Set typing status in Redis hash with expiration
+          await this.client.hset(`room:${roomId}:typing`, userId, nickname);
+          await this.client.expire(`room:${roomId}:typing`, 5); // 5 second expiry
         } else {
-          // Remove typing status
-          await this.client.del(`room:${roomId}:typing:${userId}`);
-        }
-      } else {
-        // Fallback: store in memory for typing status
-        if (!this.fallbackMaps.typingStatus) {
-          this.fallbackMaps.typingStatus = new Map<string, Map<string, { nickname: string; expiresAt: number }>>();
-        }
-        
-        if (!this.fallbackMaps.typingStatus.has(roomId)) {
-          this.fallbackMaps.typingStatus.set(roomId, new Map());
-        }
-        
-        const roomTyping = this.fallbackMaps.typingStatus.get(roomId)!;
-        
-        if (isTyping) {
-          // Store typing status with expiration
-          roomTyping.set(userId, { 
-            nickname, 
-            expiresAt: Date.now() + 5000 
-          });
-          
-          // Auto-remove after 5 seconds
-          setTimeout(() => {
-            if (roomTyping.has(userId)) {
-              roomTyping.delete(userId);
-            }
-          }, 5000);
-        } else {
-          // Remove typing status
-          roomTyping.delete(userId);
+          // Remove typing status from Redis hash
+          await this.client.hdel(`room:${roomId}:typing`, userId);
         }
       }
+      
+      // Always update in-memory fallback for consistency
+      const roomTyping = this.fallbackMaps.typingStatus.get(roomId) || new Map();
+      
+      if (isTyping) {
+        // Clear any existing timer for this user
+        const existingEntry = roomTyping.get(userId);
+        if (existingEntry?.timerId) {
+          clearTimeout(existingEntry.timerId);
+        }
+        
+        // Store typing status with expiration
+        const timerId = setTimeout(() => {
+          if (roomTyping.has(userId)) {
+            roomTyping.delete(userId);
+          }
+        }, 5000);
+        
+        roomTyping.set(userId, { 
+          nickname, 
+          expiresAt: Date.now() + 5000,
+          timerId
+        });
+      } else {
+        // Remove typing status and clear timer
+        const existingEntry = roomTyping.get(userId);
+        if (existingEntry?.timerId) {
+          clearTimeout(existingEntry.timerId);
+        }
+        roomTyping.delete(userId);
+      }
+      
+      // Ensure the room typing map is stored in fallbackMaps
+      this.fallbackMaps.typingStatus.set(roomId, roomTyping);
     } catch (error) {
       console.error('Redis setUserTypingStatus error:', error);
       // Continue execution even if Redis fails
@@ -354,48 +360,45 @@ class RedisStore {
   async getRoomTypingUsers(roomId: string, excludeUserId?: string): Promise<string[]> {
     try {
       if (this.isConnected && this.client) {
-        // Get all typing status keys for the room
-        const typingKeys = await this.client.keys(`room:${roomId}:typing:*`);
+        // Get all typing users from Redis hash using HVALS (O(1) operation)
+        const typingData = await this.client.hgetall(`room:${roomId}:typing`);
         const typingUsers: string[] = [];
 
-        for (const key of typingKeys) {
-          const userId = key.split(':').pop(); // Extract userId from key
-          if (userId && userId !== excludeUserId) {
-            const nickname = await this.client.get(key);
-            if (nickname) {
-              typingUsers.push(nickname);
-            }
+        for (const [userId, nickname] of Object.entries(typingData)) {
+          if (userId !== excludeUserId && nickname) {
+            typingUsers.push(nickname as string);
           }
         }
 
-        return typingUsers;
-      } else {
-        // Fallback: use memory storage for typing status
-        if (!this.fallbackMaps.typingStatus || !this.fallbackMaps.typingStatus.has(roomId)) {
-          return [];
-        }
-        
-        const roomTyping = this.fallbackMaps.typingStatus.get(roomId)!;
-        const typingUsers: string[] = [];
-        const now = Date.now();
-        
-        // Clean up expired typing status and collect active ones
-        for (const [userId, data] of roomTyping.entries()) {
-          if (data.expiresAt > now && userId !== excludeUserId) {
-            typingUsers.push(data.nickname);
-          } else if (data.expiresAt <= now) {
-            // Remove expired typing status
-            roomTyping.delete(userId);
-          }
-        }
-        
         return typingUsers;
       }
     } catch (error) {
-      console.error('Redis getRoomTypingUsers error:', error);
-      // Return empty array on error to prevent API failures
+      console.error('Redis getRoomTypingUsers error, falling back to memory:', error);
+    }
+    
+    // Fallback: use memory storage for typing status
+    if (!this.fallbackMaps.typingStatus || !this.fallbackMaps.typingStatus.has(roomId)) {
       return [];
     }
+    
+    const roomTyping = this.fallbackMaps.typingStatus.get(roomId)!;
+    const typingUsers: string[] = [];
+    const now = Date.now();
+    
+    // Clean up expired typing status and collect active ones
+    for (const [userId, data] of roomTyping.entries()) {
+      if (data.expiresAt > now && userId !== excludeUserId) {
+        typingUsers.push(data.nickname);
+      } else if (data.expiresAt <= now) {
+        // Remove expired typing status and clear timer
+        if (data.timerId) {
+          clearTimeout(data.timerId);
+        }
+        roomTyping.delete(userId);
+      }
+    }
+    
+    return typingUsers;
   }
 
   async addRoomMessage(roomId: string, message: Message): Promise<void> {
@@ -475,6 +478,8 @@ class RedisStore {
       // Fallback: sequential operations
       await this.removeUserRoom(userId);
       await this.removeRoomParticipant(roomId, userId);
+      // Clean up typing status for the leaving user
+      this.clearUserTypingStatus(userId, roomId);
       return;
     }
 
@@ -487,11 +492,36 @@ class RedisStore {
       // Remove user from room participants
       multi.hdel(`room:${roomId}:participants`, userId);
       
+      // Remove user's typing status
+      multi.hdel(`room:${roomId}:typing`, userId);
+      
       await multi.exec();
+      
+      // Clean up in-memory typing status and clear timer
+      this.clearUserTypingStatus(userId, roomId);
     } catch (error) {
       console.error('Redis leaveRoom atomic operation error, falling back to sequential:', error);
       await this.removeUserRoom(userId);
       await this.removeRoomParticipant(roomId, userId);
+      // Clean up typing status for the leaving user
+      this.clearUserTypingStatus(userId, roomId);
+    }
+  }
+
+  // Private helper method to clear typing status for a specific user
+  private clearUserTypingStatus(userId: string, roomId: string): void {
+    const roomTyping = this.fallbackMaps.typingStatus.get(roomId);
+    if (roomTyping) {
+      const existingEntry = roomTyping.get(userId);
+      if (existingEntry?.timerId) {
+        clearTimeout(existingEntry.timerId);
+      }
+      roomTyping.delete(userId);
+      
+      // Remove the room typing map if it's empty
+      if (roomTyping.size === 0) {
+        this.fallbackMaps.typingStatus.delete(roomId);
+      }
     }
   }
 
@@ -526,6 +556,16 @@ class RedisStore {
       if (!participants || participants.size === 0) {
         this.fallbackMaps.roomCreators.delete(roomId);
         this.fallbackMaps.roomMessages.delete(roomId);
+        // Clean up typing status and clear timers
+        const roomTyping = this.fallbackMaps.typingStatus.get(roomId);
+        if (roomTyping) {
+          for (const [, data] of roomTyping.entries()) {
+            if (data.timerId) {
+              clearTimeout(data.timerId);
+            }
+          }
+          this.fallbackMaps.typingStatus.delete(roomId);
+        }
       }
       return;
     }
@@ -537,6 +577,7 @@ class RedisStore {
         local participantsKey = KEYS[2]
         local creatorKey = KEYS[3]
         local messagesKey = KEYS[4]
+        local typingKey = KEYS[5]
         
         -- Check if room has no participants
         local participantCount = redis.call('HLEN', participantsKey)
@@ -546,6 +587,8 @@ class RedisStore {
           redis.call('DEL', creatorKey)
           -- Clear room messages
           redis.call('DEL', messagesKey)
+          -- Clear typing status
+          redis.call('DEL', typingKey)
           return 1
         else
           return 0
@@ -556,10 +599,22 @@ class RedisStore {
         `room:${roomId}`,
         `room:${roomId}:participants`,
         `room:${roomId}:creator`,
-        `room:${roomId}:messages`
+        `room:${roomId}:messages`,
+        `room:${roomId}:typing`
       ];
       
       await this.client.eval(luaScript, keys.length, ...keys);
+      
+      // Clean up in-memory typing status and clear timers
+      const roomTyping = this.fallbackMaps.typingStatus.get(roomId);
+      if (roomTyping) {
+        for (const [, data] of roomTyping.entries()) {
+          if (data.timerId) {
+            clearTimeout(data.timerId);
+          }
+        }
+        this.fallbackMaps.typingStatus.delete(roomId);
+      }
     } catch (error) {
       console.error('Redis cleanupEmptyRoom error, falling back to sequential:', error);
       // Fallback: check and cleanup sequentially
@@ -567,6 +622,16 @@ class RedisStore {
       if (participants.size === 0) {
         await this.removeRoomCreator(roomId);
         await this.clearRoomMessages(roomId);
+        // Clean up typing status and clear timers
+        const roomTyping = this.fallbackMaps.typingStatus.get(roomId);
+        if (roomTyping) {
+          for (const [, data] of roomTyping.entries()) {
+            if (data.timerId) {
+              clearTimeout(data.timerId);
+            }
+          }
+          this.fallbackMaps.typingStatus.delete(roomId);
+        }
       }
     }
   }
