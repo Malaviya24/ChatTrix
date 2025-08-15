@@ -1,4 +1,5 @@
 import { redisStore } from './redisStore';
+import { generateRoomId, generateUserId } from './utils';
 
 async function testRedisStore() {
   console.log('🧪 Testing Redis Store...\n');
@@ -13,8 +14,8 @@ async function testRedisStore() {
 
     // Test 2: Room Operations
     console.log('2. Testing Room Operations...');
-    const roomId = 'test-room-' + Date.now();
-    const userId = 'test-user-' + Date.now();
+    const roomId = await generateRoomId();
+    const userId = await generateUserId();
     
     // Join room
     await redisStore.joinRoom(userId, roomId, {
@@ -65,15 +66,27 @@ async function testRedisStore() {
     await redisStore.leaveRoom(userId, roomId);
     console.log('   ✅ User left room');
 
+    // Cleanup empty room
+    await redisStore.cleanupEmptyRoom(roomId);
+    console.log('   ✅ Room cleanup completed');
+
     // Verify cleanup
     const remainingParticipants = await redisStore.getRoomParticipants(roomId);
     const remainingCreator = await redisStore.getRoomCreator(roomId);
     const remainingUserRoom = await redisStore.getUserRoom(userId);
     
-    console.log('   ✅ Cleanup verification:');
-    console.log('      - Remaining participants:', remainingParticipants.size);
-    console.log('      - Remaining creator:', remainingCreator);
-    console.log('      - Remaining user room:', remainingUserRoom);
+    // Assert cleanup succeeded
+    if (remainingParticipants.size !== 0) {
+      throw new Error(`Cleanup failed: Expected 0 participants, got ${remainingParticipants.size}`);
+    }
+    if (remainingCreator !== null && remainingCreator !== undefined) {
+      throw new Error(`Cleanup failed: Expected no creator, got ${remainingCreator}`);
+    }
+    if (remainingUserRoom !== null && remainingUserRoom !== undefined) {
+      throw new Error(`Cleanup failed: Expected no user room mapping, got ${remainingUserRoom}`);
+    }
+    
+    console.log('   ✅ Cleanup verification passed');
 
     console.log('\n🎉 All tests passed!');
 

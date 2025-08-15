@@ -128,7 +128,7 @@ export function AnimatedGrid() {
       
       // Colors for grid lines (normalized RGB values)
       const color = i % 5 === 0 ? [0.12, 0.25, 0.69] : [0.23, 0.51, 0.96]; // Section lines vs cell lines
-      colors.push(...color, ...color, ...color, ...color, ...color, ...color);
+      colors.push(...color, ...color, ...color, ...color); // 4 vertices per iteration = 4 RGB triples
     }
     
     const geometry = new THREE.BufferGeometry();

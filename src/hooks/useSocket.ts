@@ -181,12 +181,13 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
   // Set typing status
   const setTyping = useCallback(async (isTyping: boolean) => {
     try {
-      await makeApiCall('typing', { roomId, userId, nickname, isTyping });
+      const result = await makeApiCall('typing', { roomId, userId, nickname, isTyping });
       
-      if (isTyping) {
-        setTypingUsers(prev => [...new Set([...prev, nickname])]);
-      } else {
-        setTypingUsers(prev => prev.filter(name => name !== nickname));
+      if (result.success) {
+        // Update typingUsers with other users' typing status (excluding current user)
+        if (result.typingUsers) {
+          setTypingUsers(result.typingUsers);
+        }
       }
     } catch (error) {
       console.error('❌ Failed to set typing status:', error);
@@ -249,6 +250,18 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
     }
   }, [roomId, userId, isRoomCreator]);
 
+  // Fetch typing status
+  const fetchTypingStatus = useCallback(async () => {
+    try {
+      const result = await makeApiCall('get-typing-status', { roomId });
+      if (result.success && result.typingStatus) {
+        setTypingUsers(result.typingStatus);
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch typing status:', error);
+    }
+  }, [roomId]);
+
   // Polling mechanism for participants and room updates
   useEffect(() => {
     if (!isConnected || !roomId) return;
@@ -269,6 +282,9 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
             setIsRoomCreator(result.isCreator || false);
           }
         }
+
+        // Poll for typing status updates
+        await fetchTypingStatus();
       } catch (error) {
         console.error('❌ Polling failed:', error);
         setIsConnected(false);
@@ -283,7 +299,7 @@ export function useSocket(roomId: string, userId: string, nickname: string, avat
         clearInterval(pollingIntervalRef.current);
       }
     };
-  }, [isConnected, roomId, userId, nickname, avatar, claimedCreatorStatus, participants, isRoomCreator]);
+  }, [isConnected, roomId, userId, nickname, avatar, claimedCreatorStatus, participants, isRoomCreator, fetchTypingStatus]);
 
   // Polling mechanism for new messages
   useEffect(() => {

@@ -76,18 +76,28 @@ class RedisStore {
     return JSON.stringify(participant);
   }
 
-  private deserializeParticipant(data: string): Participant {
-    const parsed = JSON.parse(data);
-    return ParticipantSchema.parse(parsed);
+  private deserializeParticipant(data: string): Participant | null {
+    try {
+      const parsed = JSON.parse(data);
+      return ParticipantSchema.parse(parsed);
+    } catch (error) {
+      console.error('Error deserializing participant data:', error, 'Raw data:', data.substring(0, 100));
+      return null;
+    }
   }
 
   private serializeMessage(message: Message): string {
     return JSON.stringify(message);
   }
 
-  private deserializeMessage(data: string): Message {
-    const parsed = JSON.parse(data);
-    return MessageSchema.parse(parsed);
+  private deserializeMessage(data: string): Message | null {
+    try {
+      const parsed = JSON.parse(data);
+      return MessageSchema.parse(parsed);
+    } catch (error) {
+      console.error('Error deserializing message data:', error, 'Raw data:', data.substring(0, 100));
+      return null;
+    }
   }
 
   // Room Participants Management
@@ -102,7 +112,10 @@ class RedisStore {
       
       for (const [userId, data] of Object.entries(participants)) {
         if (data) {
-          result.set(userId, this.deserializeParticipant(data));
+          const participant = this.deserializeParticipant(data);
+          if (participant) {
+            result.set(userId, participant);
+          }
         }
       }
       
@@ -272,10 +285,57 @@ class RedisStore {
 
     try {
       const messages = await this.client.lrange(`room:${roomId}:messages`, 0, -1);
-      return messages.map(msg => this.deserializeMessage(msg));
+      return messages.map(msg => this.deserializeMessage(msg)).filter(Boolean) as Message[];
     } catch (error) {
       console.error('Redis getRoomMessages error, falling back to memory:', error);
       return this.fallbackMaps.roomMessages.get(roomId) || [];
+    }
+  }
+
+  // Typing Status Management
+  async setUserTypingStatus(roomId: string, userId: string, nickname: string, isTyping: boolean): Promise<void> {
+    if (!this.isConnected || !this.client) {
+      // Fallback: store in memory (not ideal for typing status)
+      return;
+    }
+
+    try {
+      if (isTyping) {
+        // Set typing status with expiration (5 seconds)
+        await this.client.setex(`room:${roomId}:typing:${userId}`, 5, nickname);
+      } else {
+        // Remove typing status
+        await this.client.del(`room:${roomId}:typing:${userId}`);
+      }
+    } catch (error) {
+      console.error('Redis setUserTypingStatus error:', error);
+    }
+  }
+
+  async getRoomTypingUsers(roomId: string, excludeUserId?: string): Promise<string[]> {
+    if (!this.isConnected || !this.client) {
+      return [];
+    }
+
+    try {
+      // Get all typing status keys for the room
+      const typingKeys = await this.client.keys(`room:${roomId}:typing:*`);
+      const typingUsers: string[] = [];
+
+      for (const key of typingKeys) {
+        const userId = key.split(':').pop(); // Extract userId from key
+        if (userId && userId !== excludeUserId) {
+          const nickname = await this.client.get(key);
+          if (nickname) {
+            typingUsers.push(nickname);
+          }
+        }
+      }
+
+      return typingUsers;
+    } catch (error) {
+      console.error('Redis getRoomTypingUsers error:', error);
+      return [];
     }
   }
 
@@ -400,9 +460,68 @@ class RedisStore {
   }
 
   // Cleanup
+  async cleanupEmptyRoom(roomId: string): Promise<void> {
+    if (!this.isConnected || !this.client) {
+      // Fallback: check and cleanup sequentially
+      const participants = this.fallbackMaps.roomParticipants.get(roomId);
+      if (!participants || participants.size === 0) {
+        this.fallbackMaps.roomCreators.delete(roomId);
+        this.fallbackMaps.roomMessages.delete(roomId);
+      }
+      return;
+    }
+
+    try {
+      // Use Lua script for atomic operation
+      const luaScript = `
+        local roomKey = KEYS[1]
+        local participantsKey = KEYS[2]
+        local creatorKey = KEYS[3]
+        local messagesKey = KEYS[4]
+        
+        -- Check if room has no participants
+        local participantCount = redis.call('HLEN', participantsKey)
+        
+        if participantCount == 0 then
+          -- Remove room creator
+          redis.call('DEL', creatorKey)
+          -- Clear room messages
+          redis.call('DEL', messagesKey)
+          return 1
+        else
+          return 0
+        end
+      `;
+      
+      const keys = [
+        `room:${roomId}`,
+        `room:${roomId}:participants`,
+        `room:${roomId}:creator`,
+        `room:${roomId}:messages`
+      ];
+      
+      await this.client.eval(luaScript, keys.length, ...keys);
+    } catch (error) {
+      console.error('Redis cleanupEmptyRoom error, falling back to sequential:', error);
+      // Fallback: check and cleanup sequentially
+      const participants = await this.getRoomParticipants(roomId);
+      if (participants.size === 0) {
+        await this.removeRoomCreator(roomId);
+        await this.clearRoomMessages(roomId);
+      }
+    }
+  }
+
   async disconnect(): Promise<void> {
     if (this.client) {
-      await this.client.disconnect();
+      try {
+        await this.client.disconnect();
+      } catch (error) {
+        console.error('Error disconnecting Redis client:', error);
+      } finally {
+        this.client = null;
+        this.isConnected = false;
+      }
     }
   }
 }

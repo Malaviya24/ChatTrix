@@ -262,7 +262,8 @@ export function usePanicMode(roomId?: string, userId?: string) {
     ...panicMode,
     activatePanicMode,
     deactivatePanicMode,
-    emergencyExit: triggerEmergencyExit,
+    triggerEmergencyExit,
+    emergencyExit: panicMode.isEnabled, // Backward compatibility - boolean value
     clearAllData,
     checkRoomPanicStatus,
   };

@@ -94,7 +94,12 @@ export async function generateUserId(): Promise<string> {
       randomPart = crypto.randomUUID().replace(/-/g, '').substring(0, 9);
     } catch {
       // Fallback to Math.random if crypto is not available
-      randomPart = Math.random().toString(36).substring(2, 11);
+      randomPart = Math.random().toString(36).slice(2); // Remove "0." prefix
+      // Ensure we have at least 9 characters by concatenating additional chunks
+      while (randomPart.length < 9) {
+        randomPart += Math.random().toString(36).slice(2);
+      }
+      randomPart = randomPart.substring(0, 9); // Take exactly 9 characters
     }
   }
   
@@ -119,7 +124,12 @@ export async function generateSessionId(): Promise<string> {
       randomPart = crypto.randomUUID().replace(/-/g, '').substring(0, 9);
     } catch {
       // Fallback to Math.random if crypto is not available
-      randomPart = Math.random().toString(36).substring(0, 9);
+      randomPart = Math.random().toString(36).slice(2); // Remove "0." prefix
+      // Ensure we have at least 9 characters by concatenating additional chunks
+      while (randomPart.length < 9) {
+        randomPart += Math.random().toString(36).slice(2);
+      }
+      randomPart = randomPart.substring(0, 9); // Take exactly 9 characters
     }
   }
   

@@ -1,13 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { redisStore } from '../../src/lib/redisStore';
 import { 
-  RequestBodySchema, 
   SocketDataSchema, 
   MessageDataSchema, 
   TypingDataSchema, 
   KickUserDataSchema, 
   GetMessagesDataSchema,
-  ActionSchema,
   type SocketData,
   type MessageData,
   type TypingData,
@@ -16,7 +14,7 @@ import {
 } from '../../src/lib/validation';
 import { z } from 'zod';
 
-// Helper function to create consistent error responses
+// Helper function to create consistent error responses for Pages Router
 function createErrorResponse(
   res: NextApiResponse,
   status: number,
@@ -31,7 +29,7 @@ function createErrorResponse(
   });
 }
 
-// Helper function to create consistent success responses
+// Helper function to create consistent success responses for Pages Router
 function createSuccessResponse(
   res: NextApiResponse,
   data: Record<string, unknown>,
@@ -49,6 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
+    res.setHeader('Content-Type', 'text/plain');
     return res.status(200).end();
   }
 
@@ -114,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // Validate that action is one of the allowed actions
-      const allowedActions = ['join-room', 'send-message', 'get-messages', 'typing', 'leave-room', 'kick-user'];
+      const allowedActions = ['join-room', 'send-message', 'get-messages', 'typing', 'leave-room', 'kick-user', 'get-typing-status'];
       if (!allowedActions.includes(parsedBody.action)) {
         return createErrorResponse(
           res,
@@ -141,81 +140,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         switch (action) {
           case 'join-room':
-            // Validate required fields: roomId, userId, nickname, avatar
-            if (!data.roomId || !data.userId || !data.nickname || !data.avatar) {
-              return createErrorResponse(
-                res,
-                400,
-                'Missing required fields for join-room',
-                'roomId, userId, nickname, and avatar are required'
-              );
-            }
             validatedData = SocketDataSchema.parse(data);
             break;
             
           case 'send-message':
-            // Validate required fields: roomId, userId, message, nickname, avatar
-            if (!data.roomId || !data.userId || !data.message || !data.nickname || !data.avatar) {
-              return createErrorResponse(
-                res,
-                400,
-                'Missing required fields for send-message',
-                'roomId, userId, message, nickname, and avatar are required'
-              );
-            }
             validatedData = MessageDataSchema.parse(data);
             break;
             
           case 'get-messages':
-            // Validate required field: roomId
-            if (!data.roomId) {
-              return createErrorResponse(
-                res,
-                400,
-                'Missing required field for get-messages',
-                'roomId is required'
-              );
-            }
             validatedData = GetMessagesDataSchema.parse(data);
             break;
             
           case 'typing':
-            // Validate required fields: roomId, userId, nickname, isTyping
-            if (!data.roomId || !data.userId || !data.nickname || typeof data.isTyping !== 'boolean') {
-              return createErrorResponse(
-                res,
-                400,
-                'Missing or invalid required fields for typing',
-                'roomId, userId, nickname, and isTyping (boolean) are required'
-              );
-            }
             validatedData = TypingDataSchema.parse(data);
             break;
             
           case 'leave-room':
-            // Validate required fields: roomId, userId
-            if (!data.roomId || !data.userId) {
-              return createErrorResponse(
-                res,
-                400,
-                'Missing required fields for leave-room',
-                'roomId and userId are required'
-              );
-            }
             validatedData = SocketDataSchema.parse(data);
             break;
             
           case 'kick-user':
-            // Validate required fields: roomId, targetUserId, kickedBy
-            if (!data.roomId || !data.targetUserId || !data.kickedBy) {
-              return createErrorResponse(
-                res,
-                400,
-                'Missing required fields for kick-user',
-                'roomId, targetUserId, and kickedBy are required'
-              );
-            }
             validatedData = KickUserDataSchema.parse(data);
+            break;
+            
+          case 'get-typing-status':
+            validatedData = GetMessagesDataSchema.parse(data);
             break;
             
           default:
@@ -227,13 +176,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             );
         }
       } catch (validationError) {
-        if (validationError instanceof Error) {
-          console.error('❌ Action data validation failed:', validationError.message);
+        if (validationError instanceof z.ZodError) {
+          console.error('❌ Action data validation failed:', validationError.issues);
           return createErrorResponse(
             res,
             400,
             'Data validation failed',
-            `Invalid data format for action '${action}': ${validationError.message}`
+            `Invalid data format for action '${action}': ${validationError.issues.map(e => e.message).join(', ')}`
           );
         }
         return createErrorResponse(
@@ -259,6 +208,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return await handleLeaveRoom(validatedData as SocketData, res);
           case 'kick-user':
             return await handleKickUser(validatedData as KickUserData, res);
+          case 'get-typing-status':
+            return await handleGetTypingStatus(validatedData as GetMessagesData, res);
           default:
             return createErrorResponse(
               res,
@@ -318,16 +269,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
     
-    // Create consistent error response with environment info
-    const errorResponse = {
-      error: 'Request processing failed',
-      details: process.env.NODE_ENV === 'development' ? errorMessage : 'Internal server error',
-      env: process.env.NODE_ENV || 'unknown'
-    };
-    
-    // Set proper headers and return error response
-    res.setHeader('Content-Type', 'application/json');
-    return res.status(500).json(errorResponse);
+    // Use the consistent error response helper function
+    return createErrorResponse(
+      res,
+      500,
+      'Request processing failed',
+      process.env.NODE_ENV === 'development' ? errorMessage : 'Internal server error'
+    );
   }
 }
 
@@ -341,9 +289,22 @@ async function handleJoinRoom(data: SocketData, res: NextApiResponse) {
     // Leave previous room if any
     const previousRoom = await redisStore.getUserRoom(userId);
     if (previousRoom && previousRoom !== roomId) {
-      await redisStore.removeUserRoom(userId);
-      if (previousRoom) {
+      try {
+        // First remove user from room participants, then remove user-room mapping
         await redisStore.removeRoomParticipant(previousRoom, userId);
+        await redisStore.removeUserRoom(userId);
+      } catch (error) {
+        console.error('❌ Error leaving previous room:', error);
+        // Try to rollback: re-add user-room mapping if participant removal succeeded but user-room removal failed
+        try {
+          const isStillParticipant = await redisStore.hasRoomParticipant(previousRoom, userId);
+          if (isStillParticipant) {
+            await redisStore.setUserRoom(userId, previousRoom);
+          }
+        } catch (rollbackError) {
+          console.error('❌ Rollback failed:', rollbackError);
+        }
+        // Continue with join operation even if cleanup failed
       }
     }
     
@@ -482,11 +443,18 @@ async function handleTyping(data: TypingData, res: NextApiResponse) {
       );
     }
     
+    // Store typing status in Redis
+    await redisStore.setUserTypingStatus(roomId, userId, nickname, isTyping);
+    
+    // Get current typing users (excluding the current user)
+    const typingUsers = await redisStore.getRoomTypingUsers(roomId, userId);
+    
     return createSuccessResponse(res, {
       success: true,
       typing: isTyping,
       userId,
-      nickname
+      nickname,
+      typingUsers // Return other users who are typing
     });
   } catch (error) {
     console.error('❌ handleTyping error:', error);
@@ -519,12 +487,8 @@ async function handleLeaveRoom(data: SocketData, res: NextApiResponse) {
     // Leave room using atomic operation
     await redisStore.leaveRoom(userId, roomId);
     
-    // Check if room is now empty and clean up if needed
-    const remainingParticipants = await redisStore.getRoomParticipants(roomId);
-    if (remainingParticipants.size === 0) {
-      await redisStore.removeRoomCreator(roomId);
-      await redisStore.clearRoomMessages(roomId);
-    }
+    // Use atomic cleanup to check if room is empty and clean up if needed
+    await redisStore.cleanupEmptyRoom(roomId);
     
     return createSuccessResponse(res, {
       success: true,
@@ -591,8 +555,24 @@ async function handleKickUser(data: KickUserData, res: NextApiResponse) {
     }
 
     // Remove kicked user from room
-    await redisStore.removeRoomParticipant(roomId, targetUserId);
-    await redisStore.removeUserRoom(targetUserId);
+    try {
+      // First remove user-room mapping, then remove from room participants
+      await redisStore.removeUserRoom(targetUserId);
+      await redisStore.removeRoomParticipant(roomId, targetUserId);
+    } catch (error) {
+      console.error('❌ Error kicking user:', error);
+      // Try to rollback: re-add user-room mapping if user-room removal succeeded but participant removal failed
+      try {
+        const userRoom = await redisStore.getUserRoom(targetUserId);
+        if (!userRoom) {
+          // User-room mapping was removed, try to restore it
+          await redisStore.setUserRoom(targetUserId, roomId);
+        }
+      } catch (rollbackError) {
+        console.error('❌ Rollback failed:', rollbackError);
+      }
+      throw error; // Re-throw to trigger error response
+    }
     
     return createSuccessResponse(res, {
       success: true,
@@ -604,6 +584,39 @@ async function handleKickUser(data: KickUserData, res: NextApiResponse) {
       res,
       500,
       'Failed to kick user',
+      process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : 'Unknown error') : 'Internal server error'
+    );
+  }
+}
+
+async function handleGetTypingStatus(data: GetMessagesData, res: NextApiResponse) {
+  try {
+    const { roomId } = data;
+
+    // Validate that the room exists
+    const participants = await redisStore.getRoomParticipants(roomId);
+    if (participants.size === 0) {
+      return createErrorResponse(
+        res,
+        404,
+        'Room not found',
+        'The specified room does not exist'
+      );
+    }
+
+    // Get the typing status for the room
+    const typingStatus = await redisStore.getRoomTypingUsers(roomId);
+
+    return createSuccessResponse(res, {
+      success: true,
+      typingStatus
+    });
+  } catch (error) {
+    console.error('❌ handleGetTypingStatus error:', error);
+    return createErrorResponse(
+      res,
+      500,
+      'Failed to get typing status',
       process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : 'Unknown error') : 'Internal server error'
     );
   }
