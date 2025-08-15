@@ -1,0 +1,161 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Lenis Smooth Scrolling */
+html.lenis {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.lenis.lenis-scrolling iframe {
+  pointer-events: none;
+}
+
+/* Prevent flickering during Lenis initialization */
+.lenis-loading {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.lenis-ready {
+  opacity: 1;
+  transition: opacity 0.3s ease-in-out;
+}
+
+/* Ensure smooth page transitions */
+body {
+  overflow-x: hidden;
+}
+
+/* Prevent layout shifts during Lenis init */
+html {
+  scroll-behavior: auto;
+}
+
+/* Smooth scroll restoration */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Scroll-triggered animations - Fixed to prevent blinking */
+[data-scroll-trigger] {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  will-change: opacity, transform;
+}
+
+[data-scroll-trigger].scroll-triggered {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Prevent re-triggering of animations */
+[data-scroll-trigger].scroll-triggered {
+  transition: none;
+}
+
+/* Enhanced hover effects for smooth scrolling */
+.hover-lift {
+  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+}
+
+/* Smooth transitions for specific interactive elements only */
+button, a, input, select, textarea {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition-duration: 0.2s;
+}
+
+/* Smooth transitions for cards and containers */
+.smooth-transition {
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.5);
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.8);
+}
+
+/* Smooth focus transitions */
+.focus-smooth:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+  transition: box-shadow 0.2s ease;
+}
+
+/* Enhanced button animations */
+.btn-smooth {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-smooth::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.btn-smooth:hover::before {
+  left: 100%;
+}
