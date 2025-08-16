@@ -15,7 +15,7 @@ import {
 import { z } from 'zod';
 
 // Utility function to redact sensitive fields from data
-function redactSensitiveData(data: any): any {
+function redactSensitiveData(data: Record<string, unknown> | unknown): Record<string, unknown> | unknown {
   if (!data || typeof data !== 'object') {
     return data;
   }
@@ -43,7 +43,7 @@ function redactSensitiveData(data: any): any {
 }
 
 // Utility function for environment-gated logging
-function logDebug(message: string, data?: any) {
+function logDebug(message: string, data?: unknown) {
   if (process.env.NODE_ENV !== 'production') {
     if (data) {
       console.log(message, data);
@@ -53,7 +53,7 @@ function logDebug(message: string, data?: any) {
   }
 }
 
-function logProduction(message: string, metadata?: Record<string, any>) {
+function logProduction(message: string, metadata?: Record<string, unknown>) {
   // Production logging - minimal context, no sensitive data
   const logData = {
     timestamp: new Date().toISOString(),
