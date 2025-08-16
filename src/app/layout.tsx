@@ -13,34 +13,24 @@ export const metadata: Metadata = {
   creator: 'Chattrix',
   publisher: 'Chattrix',
   robots: 'index, follow',
-  metadataBase: new URL('https://chattrix.com'),
+  metadataBase: new URL('https://chattrix-69.vercel.app'),
   openGraph: {
     title: 'Chattrix - Secure Chat Made Simple',
     description: 'Experience the future of secure communication with Chattrix. Create private chat rooms instantly, no registration required.',
-    url: 'https://chattrix.com',
+    url: 'https://chattrix-69.vercel.app',
     siteName: 'Chattrix',
-    images: [
-      {
-        url: '/og-image.jpg',
-        width: 1200,
-        height: 630,
-        alt: 'Chattrix - Secure Chat Made Simple',
-      },
-    ],
     locale: 'en_US',
     type: 'website',
   },
   twitter: {
-    card: 'summary_large_image',
+    card: 'summary',
     title: 'Chattrix - Secure Chat Made Simple',
     description: 'Experience the future of secure communication with Chattrix. Create private chat rooms instantly, no registration required.',
-    images: ['/og-image.jpg'],
   },
   manifest: '/manifest.json',
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon-16x16.png',
-    apple: '/apple-touch-icon.png',
+    icon: '/icons/icon-192.svg',
+    apple: '/icons/icon-192.svg',
   },
 };
 
