@@ -1,9 +1,11 @@
 import Redis from 'ioredis';
 import { z } from 'zod';
+import { redisConfig } from './redisConfig';
 
 // Redis connection configuration
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-const REDIS_TTL = parseInt(process.env.REDIS_TTL || '86400'); // 24 hours default
+const REDIS_URL = redisConfig.url;
+const REDIS_TTL = redisConfig.ttl;
+const REDIS_ENABLED = redisConfig.enabled;
 
 // Validation schemas
 const ParticipantSchema = z.object({
@@ -42,14 +44,15 @@ class RedisStore {
   }
 
   private async initialize() {
+    // Skip Redis initialization if disabled
+    if (!REDIS_ENABLED) {
+      console.log('⚠️ Redis disabled via REDIS_ENABLED=false, using memory fallback');
+      this.isConnected = false;
+      return;
+    }
+
     try {
-      this.client = new Redis(REDIS_URL, {
-        maxRetriesPerRequest: 3,
-        lazyConnect: true,
-        connectTimeout: 10000,
-        commandTimeout: 5000,
-        enableReadyCheck: true,
-      });
+      this.client = new Redis(REDIS_URL, redisConfig.connectionOptions);
 
       this.client.on('connect', () => {
         console.log('✅ Redis connected successfully');
@@ -64,6 +67,7 @@ class RedisStore {
       this.client.on('error', (error) => {
         console.error('❌ Redis connection error:', error);
         this.isConnected = false;
+        // Don't throw error, just log it and continue with fallback
       });
 
       this.client.on('close', () => {
@@ -80,6 +84,7 @@ class RedisStore {
     } catch (error) {
       console.error('❌ Failed to connect to Redis, falling back to memory:', error);
       this.isConnected = false;
+      // Don't throw error, just log it and continue with fallback
     }
   }
 

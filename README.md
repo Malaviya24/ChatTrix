@@ -65,6 +65,19 @@
 4. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
 
+### 🚨 Redis Connection Issues?
+
+If you see Redis connection errors, you have several options:
+
+**Quick Fix (Development):**
+```bash
+npm run dev:no-redis
+```
+
+**Full Redis Setup:**
+- See [REDIS_SETUP.md](./REDIS_SETUP.md) for detailed instructions
+- Run `powershell -ExecutionPolicy Bypass -File scripts/redis-setup.ps1` for Windows setup help
+
 ---
 
 ## 🏗️ Architecture
