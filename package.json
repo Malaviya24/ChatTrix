@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:redis": "tsx src/lib/redisStore.test.ts"
+    "test:redis": "tsx src/lib/redisStore.test.ts",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@dicebear/collection": "^9.2.4",

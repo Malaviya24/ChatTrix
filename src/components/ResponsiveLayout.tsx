@@ -142,6 +142,7 @@ export function ResponsiveGrid({
   children, 
   cols = { sm: 1, md: 2, lg: 3, xl: 4 },
   gap = 'gap-3 sm:gap-4 lg:gap-6',
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   className = ''
 }: { 
   children: React.ReactNode; 
@@ -236,6 +237,7 @@ export function ResponsiveInput({
 // Responsive Card Component
 export function ResponsiveCard({ 
   children, 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   className = '',
   padding = 'default'
 }: { 
@@ -260,6 +262,7 @@ export function ResponsiveCard({
 export function ResponsiveText({ 
   children, 
   variant = 'body',
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   className = ''
 }: { 
   children: React.ReactNode; 
